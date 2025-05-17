@@ -1169,12 +1169,12 @@ public class Importer {
      */
     public void setCompleteNegations(Document document, JCas jCas) {
         // All Annotations
-        ArrayList<CompleteNegation> cNegationsTotal = new ArrayList<>();
-        ArrayList<Cue> cuesTotal = new ArrayList<>();
-        ArrayList<Scope> scopesTotal = new ArrayList<>();
-        ArrayList<XScope> xScopesTotal = new ArrayList<>();
-        ArrayList<Focus> focusesTotal = new ArrayList<>();
-        ArrayList<Event> eventsTotal = new ArrayList<>();
+        List<CompleteNegation> cNegationsTotal = new ArrayList<>();
+        List<Cue> cuesTotal = new ArrayList<>();
+        List<Scope> scopesTotal = new ArrayList<>();
+        List<XScope> xScopesTotal = new ArrayList<>();
+        List<Focus> focusesTotal = new ArrayList<>();
+        List<Event> eventsTotal = new ArrayList<>();
 
         //iterate over each negation
         for (org.texttechnologylab.annotation.negation.CompleteNegation negation : jCas.select(org.texttechnologylab.annotation.negation.CompleteNegation.class)) {
@@ -1195,13 +1195,13 @@ public class Importer {
             cue.setCoveredText(cue.getCoveredText(jCas.getDocumentText()));
 
             // -> partially set scopes, xscopes, focuses and events
-            ArrayList<Scope> scopes = new ArrayList<>();
-            ArrayList<XScope> xScopes = new ArrayList<>();
-            ArrayList<Focus> focuses = new ArrayList<>();
-            ArrayList<Event> events = new ArrayList<>();
+            List<Scope> scopes = new ArrayList<>();
+            List<XScope> xScopes = new ArrayList<>();
+            List<Focus> focuses = new ArrayList<>();
+            List<Event> events = new ArrayList<>();
             if (eventTL != null) {
-                ArrayList<ArrayList<Token>> spans = TokenUtils.findMaximalSpans(eventTL.stream().collect(Collectors.toCollection(ArrayList::new)));
-                for (ArrayList<Token> span : spans) {
+                List<List<Token>> spans = TokenUtils.findMaximalSpans(eventTL.stream().collect(Collectors.toCollection(ArrayList::new)));
+                for (List<Token> span : spans) {
                     // -> fully set event
                     Event event = new Event(span.getFirst().getBegin(), span.getLast().getEnd());
                     event.setDocument(document);
@@ -1211,8 +1211,8 @@ public class Importer {
                 }
             }
             if (scopeTL != null) {
-                ArrayList<ArrayList<Token>> spans = TokenUtils.findMaximalSpans(scopeTL.stream().collect(Collectors.toCollection(ArrayList::new)));
-                for (ArrayList<Token> span : spans) {
+                List<List<Token>> spans = TokenUtils.findMaximalSpans(scopeTL.stream().collect(Collectors.toCollection(ArrayList::new)));
+                for (List<Token> span : spans) {
                     // -> fully set scope
                     Scope scope = new Scope(span.getFirst().getBegin(), span.getLast().getEnd());
                     scope.setDocument(document);
@@ -1222,8 +1222,8 @@ public class Importer {
                 }
             }
             if (xscopeTL != null) {
-                ArrayList<ArrayList<Token>> spans = TokenUtils.findMaximalSpans(xscopeTL.stream().collect(Collectors.toCollection(ArrayList::new)));
-                for (ArrayList<Token> span : spans) {
+                List<List<Token>> spans = TokenUtils.findMaximalSpans(xscopeTL.stream().collect(Collectors.toCollection(ArrayList::new)));
+                for (List<Token> span : spans) {
                     // -> fully set xscope
                     XScope xscope = new XScope(span.getFirst().getBegin(), span.getLast().getEnd());
                     xscope.setDocument(document);
@@ -1233,8 +1233,8 @@ public class Importer {
                 }
             }
             if (focusTL != null) {
-                ArrayList<ArrayList<Token>> spans = TokenUtils.findMaximalSpans(focusTL.stream().collect(Collectors.toCollection(ArrayList::new)));
-                for (ArrayList<Token> span : spans) {
+                List<List<Token>> spans = TokenUtils.findMaximalSpans(focusTL.stream().collect(Collectors.toCollection(ArrayList::new)));
+                for (List<Token> span : spans) {
                     // -> fully set focus
                     Focus focus = new Focus(span.getFirst().getBegin(), span.getLast().getEnd());
                     focus.setDocument(document);
