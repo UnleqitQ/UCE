@@ -50,7 +50,7 @@
         </dependency>
 
         <dependency>
-            <groupId>org.texttechnologylab</groupId>
+            <groupId>${project.groupId}</groupId>
             <artifactId>uce.common</artifactId>
             <version>${project.version}</version>
             <scope>compile</scope>
