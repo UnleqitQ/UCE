@@ -32,59 +32,59 @@
         <dependency>
             <groupId>org.apache.logging.log4j</groupId>
             <artifactId>log4j-api</artifactId>
-            <version>2.23.1</version>
+            <version>${log4j.version}</version>
         </dependency>
         <dependency>
             <groupId>org.apache.logging.log4j</groupId>
             <artifactId>log4j-core</artifactId>
-            <version>2.23.1</version>
+            <version>${log4j.version}</version>
         </dependency>
         <!-- https://mvnrepository.com/artifact/org.mongodb/bson -->
         <dependency>
             <groupId>org.mongodb</groupId>
             <artifactId>bson</artifactId>
-            <version>5.3.1</version>
+            <version>${bson.version}</version>
         </dependency>
         <!-- https://mvnrepository.com/artifact/joda-time/joda-time -->
         <dependency>
             <groupId>joda-time</groupId>
             <artifactId>joda-time</artifactId>
-            <version>2.14.0</version>
+            <version>${joda-time.version}</version>
         </dependency>
         <!-- https://mvnrepository.com/artifact/org.slf4j/slf4j-simple -->
         <dependency>
             <groupId>org.slf4j</groupId>
             <artifactId>slf4j-simple</artifactId>
-            <version>1.6.2</version>
+            <version>${slf4j-simple.version}</version>
             <scope>test</scope>
         </dependency>
         <dependency>
             <groupId>org.jsoup</groupId>
             <artifactId>jsoup</artifactId>
-            <version>1.16.1</version>
+            <version>${jsoup.version}</version>
         </dependency>
         <dependency>
             <groupId>junit</groupId>
             <artifactId>junit</artifactId>
-            <version>3.8.1</version>
+            <version>${junit.version}</version>
             <scope>test</scope>
         </dependency>
         <!-- https://mvnrepository.com/artifact/org.springframework/spring-beans -->
         <dependency>
             <groupId>org.springframework</groupId>
             <artifactId>spring-beans</artifactId>
-            <version>6.1.3</version>
+            <version>${spring.version}</version>
         </dependency>
         <!-- https://mvnrepository.com/artifact/org.springframework/spring-context -->
         <dependency>
             <groupId>org.springframework</groupId>
             <artifactId>spring-context</artifactId>
-            <version>6.1.3</version>
+            <version>${spring.version}</version>
         </dependency>
         <dependency>
             <groupId>org.freemarker</groupId>
             <artifactId>freemarker</artifactId>
-            <version>2.3.26-incubating</version>
+            <version>${freemarker.version}</version>
             <scope>compile</scope>
         </dependency>
 
@@ -92,40 +92,40 @@
         <dependency>
             <groupId>org.reflections</groupId>
             <artifactId>reflections</artifactId>
-            <version>0.10.2</version>
+            <version>${reflections.version}</version>
         </dependency>
 
         <!-- https://mvnrepository.com/artifact/org.postgresql/postgresql -->
         <dependency>
             <groupId>org.postgresql</groupId>
             <artifactId>postgresql</artifactId>
-            <version>42.7.2</version>
+            <version>${postgresql.version}</version>
         </dependency>
 
         <!-- https://mvnrepository.com/artifact/org.hibernate/hibernate-core -->
         <dependency>
             <groupId>org.hibernate</groupId>
             <artifactId>hibernate-core</artifactId>
-            <version>5.6.15.Final</version>
+            <version>${hibernate.version}</version>
         </dependency>
 
         <dependency>
             <groupId>org.springframework</groupId>
             <artifactId>spring-orm</artifactId>
-            <version>6.0.11</version>
+            <version>${spring-orm.version}</version>
         </dependency>
         <!-- https://mvnrepository.com/artifact/javax.transaction/jta -->
         <dependency>
             <groupId>javax.transaction</groupId>
             <artifactId>jta</artifactId>
-            <version>1.1</version>
+            <version>${jta.version}</version>
         </dependency>
 
         <!-- https://mvnrepository.com/artifact/org.apache.jena/apache-jena-libs -->
         <dependency>
             <groupId>org.apache.jena</groupId>
             <artifactId>apache-jena-libs</artifactId>
-            <version>5.2.0</version>
+            <version>${jena.version}</version>
             <type>pom</type>
         </dependency>
 
@@ -139,13 +139,13 @@
         <dependency>
             <groupId>org.apache.jena</groupId>
             <artifactId>jena-arq</artifactId>
-            <version>5.2.0</version>
+            <version>${jena.version}</version>
         </dependency>
 
         <dependency>
             <groupId>com.pgvector</groupId>
             <artifactId>pgvector</artifactId>
-            <version>0.1.4</version>
+            <version>${pgvector.version}</version>
         </dependency>
 
         <!--<dependency>
@@ -157,7 +157,7 @@
         <dependency>
             <groupId>org.apache.uima</groupId>
             <artifactId>uimafit-core</artifactId>
-            <version>3.5.0</version>
+            <version>${uimafit.version}</version>
         </dependency>
 
         <!--<dependency>
@@ -177,7 +177,7 @@
         <dependency>
             <groupId>com.github.TheItCrOw</groupId>
             <artifactId>UIMATypeSystem</artifactId>
-            <version>3.0.10</version>
+            <version>${uimatypesystem.version}</version>
         </dependency>
 
         <!-- Local reference -->
