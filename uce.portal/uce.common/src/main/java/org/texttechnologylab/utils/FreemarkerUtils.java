@@ -10,17 +10,17 @@ import java.util.List;
 
 
 public class FreemarkerUtils {
-    public static List<ArrayList<Integer>> convertToNestedIntegerList(TemplateSequenceModel outerSeq)
+    public static List<List<Integer>> convertToNestedIntegerList(TemplateSequenceModel outerSeq)
             throws TemplateModelException {
 
-        List<ArrayList<Integer>> result = new ArrayList<>();
+        List<List<Integer>> result = new ArrayList<>();
 
         for (int i = 0; i < outerSeq.size(); i++) {
             TemplateModel innerModel = outerSeq.get(i);
 
             if (innerModel instanceof TemplateSequenceModel) {
                 TemplateSequenceModel innerSeq = (TemplateSequenceModel) innerModel;
-                ArrayList<Integer> innerList = new ArrayList<>();
+                List<Integer> innerList = new ArrayList<>();
 
                 for (int j = 0; j < innerSeq.size(); j++) {
                     TemplateModel valueModel = innerSeq.get(j);
