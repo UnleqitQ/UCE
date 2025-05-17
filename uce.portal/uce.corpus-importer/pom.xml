@@ -15,7 +15,7 @@
 
     <properties>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
-        <javaVersion>21</javaVersion>
+        <java.version>21</java.version>
         <maven.compiler.source>${java.version}</maven.compiler.source>
         <maven.compiler.target>${java.version}</maven.compiler.target>
     </properties>
@@ -75,9 +75,9 @@
 
         <!-- local projects-->
         <dependency>
-            <groupId>org.texttechnologylab</groupId>
+            <groupId>${project.groupId}</groupId>
             <artifactId>uce.common</artifactId>
-            <version>1.0-SNAPSHOT</version>
+            <version>${project.version}</version>
         </dependency>
 
         <!-- Global reference -->
