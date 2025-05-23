@@ -1,12 +1,9 @@
 package org.texttechnologylab.models.rag;
 
-import org.apache.uima.cas.text.Language;
 import org.joda.time.DateTime;
-import org.texttechnologylab.models.corpus.Document;
 import org.texttechnologylab.utils.SupportedLanguages;
 
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.List;
 import java.util.UUID;
 
@@ -14,7 +11,7 @@ public class RAGChatState {
     private UUID chatId;
     private String model;
     private DateTime started;
-    private ArrayList<RAGChatMessage> messages;
+    private List<RAGChatMessage> messages;
     private SupportedLanguages language;
     public RAGChatState(){
         this.started = DateTime.now();

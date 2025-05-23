@@ -6,7 +6,7 @@ import org.texttechnologylab.SessionManager;
 import org.texttechnologylab.exceptions.ExceptionUtils;
 import org.texttechnologylab.models.search.CacheItem;
 
-import java.util.HashMap;
+import java.util.Map;
 
 public class SessionJob implements Runnable {
 
@@ -42,7 +42,7 @@ public class SessionJob implements Runnable {
         }
     }
 
-    private void executeCleanupCycle(HashMap<String, CacheItem> cachedItems) {
+    private void executeCleanupCycle(Map<String, CacheItem> cachedItems) {
         var iterator = cachedItems.entrySet().iterator();
         while (iterator.hasNext()) {
             var entry = iterator.next();

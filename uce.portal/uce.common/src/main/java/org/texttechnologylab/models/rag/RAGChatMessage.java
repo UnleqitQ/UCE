@@ -10,7 +10,7 @@ public class RAGChatMessage {
     private Roles role;
     private String message;
     private DateTime created;
-    private ArrayList<Document> contextDocuments;
+    private List<Document> contextDocuments;
 
     /**
      * This is the prompt we send to our rag webserver. It differs from
@@ -24,11 +24,11 @@ public class RAGChatMessage {
         this.contextDocuments = new ArrayList<>();
     }
 
-    public ArrayList<Document> getContextDocuments() {
+    public List<Document> getContextDocuments() {
         return contextDocuments;
     }
 
-    public void setContextDocuments(ArrayList<Document> contextDocuments) {
+    public void setContextDocuments(List<Document> contextDocuments) {
         this.contextDocuments = contextDocuments;
     }
 
