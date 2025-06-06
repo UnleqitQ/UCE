@@ -35,7 +35,7 @@ public class Search_DefaultImpl implements Search {
     private RAGService ragService;
     private JenaSparqlService jenaSparqlService;
     public static final String[] QUERY_OPERATORS = {"&", "|", "!", "<->", "(", ")"};
-    private Pair<String, ArrayList<EnrichedSearchToken>> enrichment;
+    private Pair<String, List<EnrichedSearchToken>> enrichment;
 
     /**
      * Creates a new instance of the Search_DefaultImpl, throws exceptions if components couldn't be inited.

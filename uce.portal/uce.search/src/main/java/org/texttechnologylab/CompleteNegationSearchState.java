@@ -3,57 +3,58 @@ package org.texttechnologylab;
 import org.texttechnologylab.models.search.SearchType;
 
 import java.util.ArrayList;
+import java.util.List;
 
 public class CompleteNegationSearchState extends SearchState{
 
-    private ArrayList<String> cue = new ArrayList<>();
-    private ArrayList<String> scope = new ArrayList<>();
-    private ArrayList<String> xscope = new ArrayList<>();
-    private ArrayList<String> focus = new ArrayList<>();
-    private ArrayList<String> event = new ArrayList<>();
+    private List<String> cue = new ArrayList<>();
+    private List<String> scope = new ArrayList<>();
+    private List<String> xscope = new ArrayList<>();
+    private List<String> focus = new ArrayList<>();
+    private List<String> event = new ArrayList<>();
 
     public CompleteNegationSearchState(SearchType searchType) {
         super(searchType);
     }
 
 
-    public ArrayList<String> getCue() {
+    public List<String> getCue() {
         return cue;
     }
 
-    public void setCue(ArrayList<String> cue) {
+    public void setCue(List<String> cue) {
         this.cue = cue;
     }
 
-    public ArrayList<String> getScope() {
+    public List<String> getScope() {
         return scope;
     }
 
-    public void setScope(ArrayList<String> scope) {
+    public void setScope(List<String> scope) {
         this.scope = scope;
     }
 
-    public ArrayList<String> getXscope() {
+    public List<String> getXscope() {
         return xscope;
     }
 
-    public void setXscope(ArrayList<String> xscope) {
+    public void setXscope(List<String> xscope) {
         this.xscope = xscope;
     }
 
-    public ArrayList<String> getFocus() {
+    public List<String> getFocus() {
         return focus;
     }
 
-    public void setFocus(ArrayList<String> focus) {
+    public void setFocus(List<String> focus) {
         this.focus = focus;
     }
 
-    public ArrayList<String> getEvent() {
+    public List<String> getEvent() {
         return event;
     }
 
-    public void setEvent(ArrayList<String> event) {
+    public void setEvent(List<String> event) {
         this.event = event;
     }
 }

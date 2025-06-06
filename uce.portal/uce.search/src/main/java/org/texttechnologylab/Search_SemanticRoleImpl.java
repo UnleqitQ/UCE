@@ -3,11 +3,9 @@ package org.texttechnologylab;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.springframework.context.ApplicationContext;
-import org.springframework.context.ApplicationContextAware;
 import org.texttechnologylab.config.CorpusConfig;
 import org.texttechnologylab.exceptions.ExceptionUtils;
 import org.texttechnologylab.models.search.DocumentSearchResult;
-import org.texttechnologylab.models.search.SearchLayer;
 import org.texttechnologylab.models.search.SearchType;
 import org.texttechnologylab.services.PostgresqlDataInterface_Impl;
 
@@ -16,6 +14,7 @@ import java.net.URISyntaxException;
 import java.text.ParseException;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.List;
 
 /**
  * The search logic object for Semantic Role Search.
@@ -37,9 +36,9 @@ public class Search_SemanticRoleImpl implements Search {
 
     public Search_SemanticRoleImpl(ApplicationContext serviceContext,
                                    long corpusId,
-                                   ArrayList<String> arg0,
-                                   ArrayList<String> arg1,
-                                   ArrayList<String> argm,
+                                   List<String> arg0,
+                                   List<String> arg1,
+                                   List<String> argm,
                                    String verb) {
         this.searchState = new SemanticRoleSearchState(SearchType.SEMANTICROLE);
         setDefaultSearchStateParameters(serviceContext, corpusId);
@@ -179,7 +178,7 @@ public class Search_SemanticRoleImpl implements Search {
      *
      * @param argList
      */
-    private ArrayList<String> preprocess_args(ArrayList<String> argList) {
+    private List<String> preprocess_args(List<String> argList) {
         return new ArrayList<String>(argList.stream().map(a -> a
                         .trim()
                         .replace(".", "")

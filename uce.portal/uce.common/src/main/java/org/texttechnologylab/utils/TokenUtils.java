@@ -7,13 +7,13 @@ import java.util.List;
 
 
 public class TokenUtils {
-    public static ArrayList<ArrayList<Token>> findMaximalSpans(List<Token> tokens) {
-        ArrayList<ArrayList<Token>> spans = new ArrayList<>();
+    public static List<List<Token>> findMaximalSpans(List<Token> tokens) {
+        List<List<Token>> spans = new ArrayList<>();
         if (tokens.isEmpty()) return spans;
 
         // Sort tokens by start position (optional if already sorted)
         tokens.sort((t1, t2) -> Integer.compare(t1.getBegin(), t2.getEnd()));
-        ArrayList<Token> currentSpan = new ArrayList<>();
+        List<Token> currentSpan = new ArrayList<>();
         currentSpan.add(tokens.getFirst());
 
         for (int i = 1; i < tokens.size(); i++) {
