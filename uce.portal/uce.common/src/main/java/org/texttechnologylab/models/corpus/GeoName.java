@@ -1,12 +1,17 @@
 package org.texttechnologylab.models.corpus;
 
+import org.hibernate.annotations.Type;
+import org.locationtech.jts.geom.Point;
+import org.texttechnologylab.annotations.Typesystem;
 import org.texttechnologylab.models.UIMAAnnotation;
+import org.texttechnologylab.models.WikiModel;
 
 import javax.persistence.*;
 
 @Entity
 @Table(name = "geoname")
-public class GeoName extends UIMAAnnotation {
+@Typesystem(types = {org.texttechnologylab.annotation.GeoNamesEntity.class})
+public class GeoName extends UIMAAnnotation implements WikiModel {
 
     @Column(columnDefinition = "TEXT")
     private String name;
@@ -25,23 +30,9 @@ public class GeoName extends UIMAAnnotation {
     @OneToOne(mappedBy = "geoName", cascade = CascadeType.ALL, orphanRemoval = true)
     private NamedEntity refNamedEntity;
 
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "page_id", nullable = false)
-    private Page page;
-    @Column(name = "page_id", insertable = false, updatable = false)
-    private Long pageId;
-
     public GeoName(){}
     public GeoName(int begin, int end){
         super(begin, end);
-    }
-
-    public Page getPage() {
-        return page;
-    }
-
-    public void setPage(Page page) {
-        this.page = page;
     }
 
     public String getName() {
@@ -139,4 +130,7 @@ public class GeoName extends UIMAAnnotation {
     public void setRefNamedEntity(NamedEntity refNamedEntity) {
         this.refNamedEntity = refNamedEntity;
     }
+
+    @Override
+    public String getWikiId() { return "LOC-" + this.getId();}
 }

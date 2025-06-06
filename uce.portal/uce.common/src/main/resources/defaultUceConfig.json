@@ -49,12 +49,16 @@
 
     "name": "Text Technology Lab",
     "primaryColor": "#00618f",
-    "secondaryColor": "rgba(35, 35, 35, 1)"
+    "secondaryColor": "rgba(35, 35, 35, 1)",
+    "imprint": "No Imprint set."
   },
   "settings": {
     "rag": {
       "model": "ChatGPT",
       "apiKey": ""
+    },
+    "analysis": {
+      "enableAnalysisEngine": true
     }
   }
 }

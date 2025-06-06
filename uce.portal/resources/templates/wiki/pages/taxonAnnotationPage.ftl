@@ -10,6 +10,11 @@
         <#include "*/wiki/components/metadata.ftl">
     </div>
 
+    <!-- by which DUUI Tool -->
+    <div class="flexed align-items-center pl-1 w-100">
+        <i class="fas fa-toolbox color-prime"></i> <span class="text ml-2 mr-1">Annotated by</span><label class="mb-0 font-italic">${vm.getAnnotatedBy()}</label>
+    </div>
+
     <!-- BIOfid specific urls here -->
     <div class="mt-0 mb-2">
         <div>
@@ -36,6 +41,17 @@
             <#assign reduced = true>
             <#include '*/search/components/documentCardContent.ftl' >
         </div>
+    </div>
+
+    <!-- linkable space -->
+    <div class="mt-2 mb-2">
+        <#assign unique = (vm.getWikiModel().getUnique())!"none">
+        <#assign height = 500>
+        <#if unique != "none">
+            <div class="w-100">
+                <#include "*/wiki/components/linkableSpace.ftl">
+            </div>
+        </#if>
     </div>
 
     <!-- The next rdf nodes from the sparql db if they exist -->

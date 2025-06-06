@@ -21,6 +21,11 @@
         <#include "*/css/layered-search-builder.css">
         <#include "*/css/kwic.css">
         <#include "*/css/drawflow.css">
+        <#include "*/css/analysis.css">
+
+        <#-- leaflet specific requirements -->
+        <#include "*/css/leaflet/MarkerCluster.css">
+        <#include "*/css/leaflet/MarkerCluster.Default.css">
     </style>
     <script src="https://kit.fontawesome.com/b0888ca2eb.js"
             crossorigin="anonymous"></script>
@@ -50,23 +55,26 @@
     <script src="js/visualization/cdns/chartjs-449.js"></script>
     <script src="js/visualization/cdns/d3js-790.js"></script>
     <script src="js/visualization/cdns/drawflow-last.js"></script>
+    <!-- for leaflet search plugin -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet-control-geocoder/dist/Control.Geocoder.css"/>
+    <script src="https://unpkg.com/leaflet-control-geocoder/dist/Control.Geocoder.js"></script>
+    <!-- leaflet clusters and heatmap plugins -->
+    <script src="js/visualization/cdns/leaflet-heat.js"></script>
+    <!--<script src="js/visualization/cdns/leaflet.markercluster.js"></script>-->
+    <script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"></script>
 
+    <!-- for Markdown blocks -->
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
     <script type="module" src="js/md-block.js"></script>
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.4.0/gsap.min.js"></script>
     <script src="https://requirejs.org/docs/release/2.3.5/minified/require.js"></script>
     <!--<script src="https://unpkg.com/@tweenjs/tween.js@^20.0.0/dist/tween.umd.js"></script>-->
-
     <title>${title}</title>
 </head>
 
 <body>
 <#include "*/messageModal.ftl">
-
-<!--<div id="leaflet-map-modal">
-
-</div>-->
 
 <!-- The flow chart of the Linkable objects -->
 <div id="flow-chart-modal" class="display-none">
@@ -84,13 +92,13 @@
             <!-- Right-pointing arrow with white border -->
             <marker id="arrow-right" markerWidth="10" markerHeight="7" refX="5" refY="3.5"
                     orient="auto" markerUnits="strokeWidth">
-                <path d="M0,0 L0,7 L10,3.5 z" fill="var(--prime)" />
+                <path d="M0,0 L0,7 L10,3.5 z" fill="var(--prime)"/>
             </marker>
 
             <!-- Left-pointing arrow with white border -->
             <marker id="arrow-left" markerWidth="10" markerHeight="7" refX="5" refY="3.5"
                     orient="auto" markerUnits="strokeWidth">
-                <path d="M10,0 L10,7 L0,3.5 z" fill="var(--prime)" />
+                <path d="M10,0 L10,7 L0,3.5 z" fill="var(--prime)"/>
             </marker>
         </defs>
     </svg>
@@ -134,7 +142,8 @@
                            data-content="${languageResource.get("openCorpus")}">
                             <i class="fas fa-globe large-font mt-1 text-dark mr-1 ml-1"></i>
                         </a>
-                        <select class="form-control" id="corpus-select" aria-label="Default select example" data-trigger="hover"
+                        <select class="form-control" id="corpus-select" aria-label="Default select example"
+                                data-trigger="hover"
                                 data-toggle="popover" data-placement="right"
                                 data-content="${languageResource.get("selectCorpus")}">
                             <#list corpora as corpusVm>
@@ -159,6 +168,13 @@
                                     class="fas fa-globe-europe color-prime"></i> Portal</a>
                         <a class="switch-view-btn btn text" data-id="lexicon"><i
                                     class="fab fa-wikipedia-w color-prime"></i> ${languageResource.get("lexicon")}</a>
+                        <a class="switch-view-btn btn text" data-id="timeline-map"><i
+                                    class="fas fa-map-marked-alt color-prime"></i> ${languageResource.get("map")}</a>
+                        <#if system.getSettings().getAnalysis().isEnableAnalysisEngine()>
+                            <a class="switch-view-btn btn text" data-id="analysis"><i
+                                        class="fas fa-chart-pie color-prime"></i> ${languageResource.get("analysis")}
+                            </a>
+                        </#if>
                         <a class="switch-view-btn btn text" data-id="team"><i
                                     class="fas fa-users color-prime"></i> ${languageResource.get("team")}</a>
                     </div>
@@ -325,12 +341,12 @@
                                 <div class="option w-auto" data-trigger="hover"
                                      data-toggle="popover" data-placement="top" data-html="true"
                                      data-content="${languageResource.get("enrichOption")}">
-                                    <#assign enrichDisabled = 'checked'>
+                                    <#--<#assign enrichDisabled = 'checked'>
                                     <#if !isSparqlAlive>
                                         <#assign enrichDisabled = 'disabled'>
-                                    </#if>
+                                    </#if>-->
                                     <label class="mb-0 w-100 small-font mr-3">Enrich</label>
-                                    <input type="checkbox" data-id="ENRICH" ${enrichDisabled}/>
+                                    <input type="checkbox" data-id="ENRICH"/>
                                 </div>
                             </div>
                         </div>
@@ -352,6 +368,27 @@
         <!-- Lexicon -->
         <div class="view display-none" data-id="lexicon">
             <#include "*/wiki/lexicon.ftl" />
+        </div>
+
+        <!-- Corpus Map -->
+        <div class="view display-none" data-id="timeline-map">
+            <!-- Header -->
+            <header class="container-fluid card-shadow bg-lightgray">
+                <div class="container flexed align-items-center justify-content-between">
+                    <h3 class="text-center mb-0 mr-1 color-prime">Linked-Corpus Map</h3>
+                    <a class="w-rounded-btn mb-0 mr-0 ml-2 mt-0" href="#uce-timeline-map">
+                        <i class="fas fa-angle-double-down"></i>
+                    </a>
+                </div>
+            </header>
+            <div>
+                <div id="uce-timeline-map"></div>
+            </div>
+        </div>
+
+        <!-- analysis -->
+        <div class="view display-none" data-id="analysis">
+            <#include "*/wiki/analysis.ftl" />
         </div>
 
         <!-- team -->
@@ -439,6 +476,9 @@
                             <i class="fas fa-globe-europe mr-1"></i> Website
                         </a>
                         <p class="mb-0">${system.getCorporate().getContact().getAddress()}</p>
+                        <a class="mt-1" href="/imprint">
+                            <i class="fas fa-gavel mr-1"></i> ${languageResource.get("imprint")}
+                        </a>
                     </div>
                 </div>
             </div>
@@ -485,6 +525,7 @@
     <#include "js/search.js">
     <#include "js/layeredSearch.js">
     <#include "js/keywordInContext.js">
+    <#include "js/analysis.js">
+    <#include "js/analysisAPI.js">
 </script>
-
 </html>

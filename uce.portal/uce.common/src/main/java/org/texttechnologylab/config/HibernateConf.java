@@ -6,7 +6,10 @@ import org.hibernate.boot.registry.StandardServiceRegistryBuilder;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.transaction.annotation.EnableTransactionManagement;
 import org.texttechnologylab.models.biofid.BiofidTaxon;
+import org.texttechnologylab.models.biofid.GazetteerTaxon;
+import org.texttechnologylab.models.biofid.GnFinderTaxon;
 import org.texttechnologylab.models.corpus.*;
+import org.texttechnologylab.models.corpus.links.AnnotationLink;
 import org.texttechnologylab.models.corpus.links.AnnotationToDocumentLink;
 import org.texttechnologylab.models.corpus.links.DocumentLink;
 import org.texttechnologylab.models.corpus.links.DocumentToAnnotationLink;
@@ -38,6 +41,7 @@ public class HibernateConf {
         metadataSources.addAnnotatedClass(UCEMetadataFilter.class);
         // Links
         metadataSources.addAnnotatedClass(DocumentLink.class);
+        metadataSources.addAnnotatedClass(AnnotationLink.class);
         metadataSources.addAnnotatedClass(DocumentToAnnotationLink.class);
         metadataSources.addAnnotatedClass(AnnotationToDocumentLink.class);
         metadataSources.addAnnotatedClass(Line.class);
@@ -50,7 +54,8 @@ public class HibernateConf {
         metadataSources.addAnnotatedClass(Paragraph.class);
         metadataSources.addAnnotatedClass(Sentence.class);
         metadataSources.addAnnotatedClass(GbifOccurrence.class);
-        metadataSources.addAnnotatedClass(Taxon.class);
+        metadataSources.addAnnotatedClass(GazetteerTaxon.class);
+        metadataSources.addAnnotatedClass(GnFinderTaxon.class);
         metadataSources.addAnnotatedClass(BiofidTaxon.class);
         metadataSources.addAnnotatedClass(Time.class);
         metadataSources.addAnnotatedClass(WikiDataHyponym.class);

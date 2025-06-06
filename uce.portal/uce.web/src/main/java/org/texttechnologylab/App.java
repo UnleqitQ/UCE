@@ -17,10 +17,12 @@ import org.texttechnologylab.exceptions.ExceptionUtils;
 import org.texttechnologylab.freeMarker.Renderer;
 import org.texttechnologylab.freeMarker.RequestContextHolder;
 import org.texttechnologylab.models.corpus.Corpus;
-import org.texttechnologylab.models.corpus.LexiconEntryId;
 import org.texttechnologylab.models.corpus.UCELog;
+import org.texttechnologylab.modules.ModelGroup;
+import org.texttechnologylab.modules.ModelResources;
 import org.texttechnologylab.routes.*;
 import org.texttechnologylab.services.LexiconService;
+import org.texttechnologylab.services.MapService;
 import org.texttechnologylab.services.PostgresqlDataInterface_Impl;
 import org.texttechnologylab.utils.ImageUtils;
 import org.texttechnologylab.utils.StringUtils;
@@ -33,6 +35,7 @@ import java.io.*;
 import java.nio.file.Files;
 import java.nio.file.StandardOpenOption;
 import java.util.HashMap;
+import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 
@@ -43,6 +46,7 @@ public class App {
     private static final Logger logger = LogManager.getLogger(App.class);
     private static CommonConfig commonConfig = null;
     private static boolean forceLexicalization = false;
+    private static int DUUIInputCounter = 0;
 
     public static void main(String[] args) throws IOException {
         logger.info("Starting the UCE web service...");
@@ -79,7 +83,7 @@ public class App {
         // Execute the external database scripts
         logger.info("Executing external database scripts from " + commonConfig.getDatabaseScriptsLocation());
         ExceptionUtils.tryCatchLog(
-                () -> SystemStatus.ExecuteExternalDatabaseScripts(commonConfig.getDatabaseScriptsLocation(), context.getBean(PostgresqlDataInterface_Impl.class)),
+                () -> SystemStatus.executeExternalDatabaseScripts(commonConfig.getDatabaseScriptsLocation(), context.getBean(PostgresqlDataInterface_Impl.class)),
                 (ex) -> logger.warn("Couldn't read the db scripts in the external database scripts folder; path wasn't found or other IO problems. ", ex));
         logger.info("Finished with executing external database scripts.");
 
@@ -94,11 +98,17 @@ public class App {
         var languageResource = new LanguageResources("en-EN");
         logger.info(languageResource.get("search"));
 
+        // Load in and test the model resources for the Analysis Engine
+        if(SystemStatus.UceConfig.getSettings().getAnalysis().isEnableAnalysisEngine()){
+            var modelResources = new ModelResources();
+            logger.info("Testing the model resources:");
+        }
+
         // Start the different cronjobs in the background
         SessionManager.InitSessionManager(commonConfig.getSessionJobInterval());
         logger.info("Initialized the Session Job.");
 
-        SystemStatus.InitSystemStatus(commonConfig.getSystemJobInterval(), context);
+        SystemStatus.initSystemStatus(commonConfig.getSystemJobInterval(), context);
         logger.info("Initialized the System Job.");
 
         logger.info("Checking if we can or should update the lexicon... (this may take a moment depending on the time of the last update. Runs asynchronous.)");
@@ -119,6 +129,19 @@ public class App {
                 logger.info("Finished updating the linkables. Updated linkables: " + result);
             } catch (Exception ex){
                 logger.error("There was an error trying to refresh linkables in the startup of the web app. App starts normally though.");
+            }
+        });
+
+        logger.info("Checking if we can or should update any geoname locations... (this may take a moment depending on the time of the last update. Runs asynchronous.)");
+        CompletableFuture.runAsync(() -> {
+            try{
+                var result = context.getBean(PostgresqlDataInterface_Impl.class).callGeonameLocationRefresh();
+                logger.info("Finished updating the geoname locations. Updated locations: " + result);
+                logger.info("Trying to refresh the timeline map cache...");
+                context.getBean(MapService.class).refreshCachedTimelineMap(false);
+                logger.info("Finished refreshing the timeline map.");
+            } catch (Exception ex){
+                logger.error("There was an error trying to refresh geoname locations in the startup of the web app. App starts normally though.");
             }
         });
 
@@ -222,13 +245,15 @@ public class App {
         }
     }
 
-    private static void initSparkRoutes(ApplicationContext context) {
+    private static void initSparkRoutes(ApplicationContext context) throws IOException {
         var searchApi = new SearchApi(context, configuration);
         var documentApi = new DocumentApi(context, configuration);
         var ragApi = new RAGApi(context, configuration);
         var corpusUniverseApi = new CorpusUniverseApi(context, configuration);
         var wikiApi = new WikiApi(context, configuration);
         var importExportApi = new ImportExportApi(context);
+        var analysisApi = new AnalysisApi(context, configuration, DUUIInputCounter);
+        var mapApi = new MapApi(context, configuration);
         Renderer.freemarkerConfig = configuration;
 
         before((request, response) -> {
@@ -259,6 +284,8 @@ public class App {
             RequestContextHolder.setLanguageResources(languageResources);
         });
 
+        ModelResources modelResources = new ModelResources();
+        List<ModelGroup> groups = modelResources.getGroupedModelObjects();
         // Landing page
         get("/", (request, response) -> {
             var model = new HashMap<String, Object>();
@@ -276,9 +303,17 @@ public class App {
             model.put("lexiconEntriesCount", context.getBean(LexiconService.class).countLexiconEntries());
             model.put("lexiconizableAnnotations", LexiconService.lexiconizableAnnotations);
             model.put("uceVersion", commonConfig.getUceVersion());
+            model.put("modelGroups", groups);
 
             // The vm files are located under the resources directory
             return new ModelAndView(model, "index.ftl");
+        }, new CustomFreeMarkerEngine(configuration));
+
+        // Potential imprint
+        get("/imprint", (request, response) -> {
+            var model = new HashMap<String, Object>();
+            model.put("imprint", SystemStatus.UceConfig.getCorporate().getImprint());
+            return new ModelAndView(model, "imprint.ftl");
         }, new CustomFreeMarkerEngine(configuration));
 
         // A document reader view
@@ -308,6 +343,7 @@ public class App {
 
             path("/wiki", () -> {
                 get("/page", wikiApi.getPage);
+                get("/annotation", wikiApi.getAnnotation);
                 path("/linkable", () -> {
                     post("/node", wikiApi.getLinkableNode);
                 });
@@ -321,6 +357,10 @@ public class App {
             path("/corpus", () -> {
                 get("/inspector", documentApi.getCorpusInspectorView);
                 get("/documentsList", documentApi.getDocumentListOfCorpus);
+                path("/map", () -> {
+                    post("/linkedOccurrences", mapApi.getLinkedOccurrences);
+                    post("/linkedOccurrenceClusters", mapApi.getLinkedOccurrenceClusters);
+                });
             });
 
             path("/search", () -> {
@@ -330,6 +370,14 @@ public class App {
                 get("/active/page", searchApi.activeSearchPage);
                 get("/active/sort", searchApi.activeSearchSort);
                 get("/semanticRole/builder", searchApi.getSemanticRoleBuilderView);
+            });
+
+            path("/analysis", () -> {
+                post("/runPipeline", analysisApi.runPipeline);
+                get("/setHistory", analysisApi.setHistory);
+                post("/callHistory", analysisApi.callHistory);
+                post("/callHistoryText", analysisApi.callHistoryText);
+//                get("/runPipeline", analysisApi.runPipeline);
             });
 
             path("/corpusUniverse", () -> {

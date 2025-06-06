@@ -17,7 +17,22 @@ var FlowVizHandler = (function () {
         activatePopovers();
     }
 
-    FlowVizHandler.prototype.createNewFromLinkableNode = async function (unique) {
+    FlowVizHandler.prototype.createNewFromLinkableNode = async function (unique, target) {
+        let container = undefined;
+        if (target === undefined || target === '') {
+            container = document.getElementById('full-flow-container');
+            $(container).parent('#flow-chart-modal').show();
+            container.innerHTML = ''; // reset the last chart
+        } else {
+            container = target;
+            container.innerHTML = ''; // reset the last chart
+            // Add a loader
+            $(container).append(`
+                <div class="full-loader">
+                    <div class="simple-loader"><p class="p-2 m-0 text-center w-100 color-prime font-italic">Loading</p></div>
+                </div>`);
+        }
+
         $.ajax({
             url: '/api/wiki/linkable/node',
             type: "POST",
@@ -25,17 +40,16 @@ var FlowVizHandler = (function () {
                 unique: unique,
             }),
             contentType: "application/json",
-            success: function(response) {
+            success: function (response) {
                 const node = JSON.parse(response);
-                const container = document.getElementById('full-flow-container');
-                container.innerHTML = ''; // reset the last chart
-                $(container).parent('#flow-chart-modal').show();
                 window.flowVizHandler.createFlowChart(container, node);
+                $(container).find('.full-loader').fadeOut(125);
             },
             error: (xhr, status, error) => {
-                showMessageModal("Unknown Error", "There was an unknown error loading the linkable node.")
+                showMessageModal("Unknown Error", "There was an unknown error loading the linkable node.");
             }
         }).always(() => {
+            $(container).find('.full-loader').fadeOut(125);
         });
     }
 
@@ -53,6 +67,7 @@ window.flowVizHandler = getNewFlowVizHandler();
  */
 $('body').on('click', '.open-linkable-node', function () {
     const unique = $(this).data('unique');
-    window.flowVizHandler.createNewFromLinkableNode(unique);
+    const target = $(this).data('target');
+    window.flowVizHandler.createNewFromLinkableNode(unique, target);
 })
 

@@ -4,6 +4,7 @@
 import {ChartJS} from '/js/visualization/chartjs.js';
 import {UCEMap} from '/js/visualization/uceMap.js';
 import {D3JS} from '/js/visualization/d3js.js';
+import {ECharts} from '/js/visualization/echarts.js';
 
 var GraphVizHandler = (function () {
 
@@ -13,18 +14,19 @@ var GraphVizHandler = (function () {
         console.log('Created GraphViz Handler.');
     }
 
-    GraphVizHandler.prototype.createUceMap = async function(target){
+    GraphVizHandler.prototype.createUceMap = function (target, readonly = false) {
         const chartId = generateUUID();
-        const uceMap = new UCEMap(target);
+        const uceMap = new UCEMap(target, readonly);
 
         this.activeCharts[chartId] = uceMap;
         activatePopovers();
+        return uceMap;
     }
 
     /**
      * [CHARTJS] -> Creates a pie chart into the given $target (jquery object)
      */
-    GraphVizHandler.prototype.createBasicChart = async function (target, title, data, type=null) {
+    GraphVizHandler.prototype.createBasicChart = async function (target, title, data, type = null) {
         const chartId = generateUUID();
         let wrapper = document.createElement('div');
         wrapper.classList.add('chart-container');
@@ -56,7 +58,7 @@ var GraphVizHandler = (function () {
         const jsChart = new ChartJS(canvas, title);
 
         jsChart.setData(data);
-        if (type){
+        if (type) {
             jsChart.setType(type);
         }
         this.activeCharts[chartId] = jsChart;
@@ -126,9 +128,130 @@ var GraphVizHandler = (function () {
     }
 
 
-    GraphVizHandler.prototype.getColorForWeight = function(weight) {
+    GraphVizHandler.prototype.getColorForWeight = function (weight) {
         return getColorForWeight(weight);
     }
+
+    GraphVizHandler.prototype.createSankeyChart = async function (target, title, linksData, nodesData,onClick = null) {
+        const chartId = generateUUID();
+
+        const option = {
+            title: {
+                text: title,
+                top: 'bottom',
+                left: 'right'
+            },
+            tooltip: {
+                trigger: 'item',
+                triggerOn: 'mousemove',
+                formatter: function (params) {
+                    if (params.dataType === 'edge') {
+                        return params.data.source + ' → ' + params.data.target + ': <b>' + params.data.value + '</b>';
+                    } else {
+                        return params.name;
+                    }
+                }
+            },
+            series: {
+                type: 'sankey',
+                layout: 'none',
+                data: nodesData,
+                links: linksData,
+                emphasis: {
+                    focus: 'adjacency',
+                    label: {
+                        show: true,
+                        color: '#000'
+                    }
+                },
+                lineStyle: {
+                    color: 'gradient',
+                    curveness: 0.5
+                },
+                label: {
+                    //color: '#000'
+                    show: false
+                }
+            }
+        };
+
+        const echart = new ECharts(target, option); // Pass full option
+        this.activeCharts[chartId] = echart;
+
+        echart.getInstance().on('click', function (params) {
+            if (onClick && typeof onClick === 'function') {
+                onClick(params);
+            }
+
+            if (params.dataType === 'node') {
+                const clickedNode = params.name;
+
+                const connectedNodes = new Set([clickedNode]);
+                const connectedLinks = new Set();
+
+                linksData.forEach(link => {
+                    if (link.source === clickedNode || link.target === clickedNode) {
+                        connectedNodes.add(link.source);
+                        connectedNodes.add(link.target);
+                        connectedLinks.add(link.source + '->' + link.target);
+                    }
+                });
+
+                const updatedNodes = nodesData.map(node => ({
+                    ...node,
+                    label: {
+                        show: connectedNodes.has(node.name)
+                    },
+                    itemStyle: {
+                        ...(node.itemStyle || {}),
+                        opacity: connectedNodes.has(node.name) ? 1 : 0.2
+                    }
+                }));
+
+                const updatedLinks = linksData.map(link => ({
+                    ...link,
+                    lineStyle: {
+                        ...(link.lineStyle || {}),
+                        opacity: connectedLinks.has(link.source + '->' + link.target) ? 1 : 0.1
+                    }
+                }));
+
+                echart.getInstance().setOption({
+                    series: [{
+                        data: updatedNodes,
+                        links: updatedLinks
+                    }]
+                });
+
+            }
+            else {
+                const resetNodes = nodesData.map(node => ({
+                    ...node,
+                    label: { show: false },
+                    // itemStyle: {
+                    //     ...(node.itemStyle || {}),
+                    //     opacity: 0.5
+                    // }
+                }));
+
+                const resetLinks = linksData.map(link => ({
+                    ...link,
+                    lineStyle: {
+                        color: 'gradient',
+                        curveness: 0.5
+                    },
+                }));
+
+                echart.getInstance().setOption({
+                    series: [{
+                        data: resetNodes,
+                        links: resetLinks
+                    }]
+                });
+            }
+        });
+        return echart;
+    };
 
     return GraphVizHandler;
 }());

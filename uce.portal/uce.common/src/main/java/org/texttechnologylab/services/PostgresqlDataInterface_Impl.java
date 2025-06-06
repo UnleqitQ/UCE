@@ -13,12 +13,14 @@ import org.texttechnologylab.exceptions.DatabaseOperationException;
 import org.texttechnologylab.models.Linkable;
 import org.texttechnologylab.models.ModelBase;
 import org.texttechnologylab.models.UIMAAnnotation;
+import org.texttechnologylab.models.biofid.BiofidTaxon;
+import org.texttechnologylab.models.biofid.GazetteerTaxon;
+import org.texttechnologylab.models.biofid.GnFinderTaxon;
 import org.texttechnologylab.models.corpus.*;
-import org.texttechnologylab.models.corpus.links.AnnotationToDocumentLink;
-import org.texttechnologylab.models.corpus.links.DocumentLink;
-import org.texttechnologylab.models.corpus.links.DocumentToAnnotationLink;
-import org.texttechnologylab.models.corpus.links.Link;
+import org.texttechnologylab.models.corpus.links.*;
 import org.texttechnologylab.models.dto.UCEMetadataFilterDto;
+import org.texttechnologylab.models.dto.map.MapClusterDto;
+import org.texttechnologylab.models.dto.map.PointDto;
 import org.texttechnologylab.models.gbif.GbifOccurrence;
 import org.texttechnologylab.models.globe.GlobeTaxon;
 import org.texttechnologylab.models.imp.ImportLog;
@@ -43,7 +45,6 @@ import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.util.*;
 import java.util.function.Function;
-import java.util.stream.Collectors;
 
 @Service
 public class PostgresqlDataInterface_Impl implements DataInterface {
@@ -111,27 +112,94 @@ public class PostgresqlDataInterface_Impl implements DataInterface {
         }));
     }
 
-    public List<Taxon> getIdentifiableTaxonsByValues(List<String> tokens) throws DatabaseOperationException {
-        var tokensAsOneString = String.join(" ", tokens);
-        var finalTokens = new ArrayList<String>(tokens);
-        finalTokens.add(tokensAsOneString);
+    public ArrayList<PointDto> getGeonameTimelineLinks(double minLng,
+                                                       double minLat,
+                                                       double maxLng,
+                                                       double maxLat,
+                                                       java.sql.Date fromDate,
+                                                       java.sql.Date toDate,
+                                                       long corpusId,
+                                                       int skip,
+                                                       int take) throws DatabaseOperationException {
+        return executeOperationSafely((session) -> session.doReturningWork((connection) -> {
+            try (var storedProcedure = connection.prepareCall("{call uce_query_geoname_timeline_links" + "(?, ?, ?, ?, ?, ?, ?, ?, ?)}")) {
+                storedProcedure.setDouble(1, minLng);
+                storedProcedure.setDouble(2, minLat);
+                storedProcedure.setDouble(3, maxLng);
+                storedProcedure.setDouble(4, maxLat);
+                storedProcedure.setDate(5, fromDate);
+                storedProcedure.setDate(6, toDate);
+                storedProcedure.setInt(7, (int) corpusId);
+                storedProcedure.setInt(8, skip);
+                storedProcedure.setInt(9, take);
 
-        // TODO: Hardcoded SQL, since writing this in Hibernate is waaaay more painful
+                var result = storedProcedure.executeQuery();
+                var points = new ArrayList<PointDto>();
+                while (result.next()) {
+                    var pointDto = new PointDto();
+                    pointDto.setId(result.getLong("id"));
+                    pointDto.setAnnotationId(result.getLong("annotationId"));
+                    pointDto.setAnnotationType(result.getString("annotationType"));
+                    pointDto.setLocationCoveredText(result.getString("locationcoveredtext"));
+                    pointDto.setLocation(result.getString("location"));
+                    pointDto.setDateCoveredText(result.getString("datecoveredtext"));
+                    var date = result.getDate("date");
+                    pointDto.setDate(date != null ? date.toString() : null);
+                    pointDto.setLabel(result.getString("fromcoveredtext"));
+                    pointDto.setLongitude(result.getDouble("lng"));
+                    pointDto.setLatitude(result.getDouble("lat"));
+                    points.add(pointDto);
+                }
+                return points;
+            }
+        }));
+    }
+
+    public ArrayList<MapClusterDto> getGeonameClustersFromTimelineMap(double minLng,
+                                                                      double minLat,
+                                                                      double maxLng,
+                                                                      double maxLat,
+                                                                      double gridSize,
+                                                                      java.sql.Date fromDate,
+                                                                      java.sql.Date toDate,
+                                                                      long corpusId) throws DatabaseOperationException {
+        return executeOperationSafely((session) -> session.doReturningWork((connection) -> {
+            try (var storedProcedure = connection.prepareCall("{call uce_query_clustered_geoname_timeline_cache" + "(?, ?, ?, ?, ?, ?, ?, ?)}")) {
+                storedProcedure.setDouble(1, minLng);
+                storedProcedure.setDouble(2, minLat);
+                storedProcedure.setDouble(3, maxLng);
+                storedProcedure.setDouble(4, maxLat);
+                storedProcedure.setDouble(5, gridSize);
+                storedProcedure.setDate(6, fromDate);
+                storedProcedure.setDate(7, toDate);
+                storedProcedure.setInt(8, (int) corpusId);
+
+                var result = storedProcedure.executeQuery();
+                var clusters = new ArrayList<MapClusterDto>();
+                while (result.next()) {
+                    var clusterDto = new MapClusterDto();
+                    clusterDto.setCount(result.getInt("count"));
+                    clusterDto.setLongitude(result.getDouble("lng"));
+                    clusterDto.setLatitude(result.getDouble("lat"));
+                    clusters.add(clusterDto);
+                }
+                return clusters;
+            }
+        }));
+    }
+
+    public List<String> getIdentifiableTaxonsByValue(String token) throws DatabaseOperationException {
         return executeOperationSafely((session) -> {
-            String sql = "SELECT * FROM taxon t " +
-                    "WHERE (lower(t.coveredText) IN :tokens " +
-                    "OR EXISTS ( " +
-                    "    SELECT 1 FROM unnest(t.value_array) AS val " +
-                    "    WHERE TRIM(LOWER(val)) IN :tokens " +
-                    ")) " +
-                    "AND t.identifier IS NOT NULL " +
-                    "AND t.identifier <> '' ";
+            String sql = "SELECT DISTINCT biofidurl FROM biofidtaxon WHERE primaryname ILIKE :token LIMIT 100";
 
-            // Create a query with the native SQL
-            var query = session.createNativeQuery(sql, Taxon.class);
-            query.setParameter("tokens", finalTokens.stream().map(String::toLowerCase).toList());
+            var query = session.createNativeQuery(sql); // No type/class here
+            query.setParameter("token", "%" + token + "%");
 
-            return query.getResultList();
+            @SuppressWarnings("unchecked")
+            List<Object> result = query.getResultList();
+            return result.stream()
+                    .map(Object::toString)
+                    .toList();
         });
     }
 
@@ -246,22 +314,28 @@ public class PostgresqlDataInterface_Impl implements DataInterface {
         });
     }
 
-    public List<Link> getAllLinksOfLinkable(long id, List<Class<? extends ModelBase>> possibleLinkTypes) throws DatabaseOperationException {
+    public List<Link> getAllLinksOfLinkable(long id, Class<? extends Linkable> linkableType, List<Class<? extends ModelBase>> possibleLinkTypes) throws DatabaseOperationException {
         // A linkable object can have multiple links that reference different tables (document, namedentity, token...)
         var links = new ArrayList<Link>();
 
         for (var type : possibleLinkTypes) {
-            links.addAll(getLinksOfLinkableByType(id, type));
+            links.addAll(getLinksOfLinkableByType(id, linkableType, type));
         }
         return links;
     }
 
-    public List<Link> getLinksOfLinkableByType(long id, Class<? extends ModelBase> type) throws DatabaseOperationException {
+    public List<Link> getLinksOfLinkableByType(long id, Class<? extends Linkable> linkableType, Class<? extends ModelBase> type) throws DatabaseOperationException {
         return executeOperationSafely((session) -> {
             var criteria = session.createCriteria(type);
             criteria.add(Restrictions.or(
-                    Restrictions.eq("fromId", id),
-                    Restrictions.eq("toId", id)
+                    Restrictions.and(
+                            Restrictions.eq("fromId", id),
+                            Restrictions.eq("fromAnnotationType", linkableType.getName())
+                    ),
+                    Restrictions.and(
+                            Restrictions.eq("toId", id),
+                            Restrictions.eq("toAnnotationType", linkableType.getName())
+                    )
             ));
             return criteria.list();
         });
@@ -271,6 +345,7 @@ public class PostgresqlDataInterface_Impl implements DataInterface {
         return executeOperationSafely(session -> {
             var linkable = session.get(clazz, id);
             if (linkable instanceof Document doc) Hibernate.initialize(doc.getPages());
+            if(clazz != Document.class && clazz != Page.class && linkable instanceof UIMAAnnotation anno) Hibernate.initialize(anno.getPage());
             return linkable;
         });
     }
@@ -333,7 +408,9 @@ public class PostgresqlDataInterface_Impl implements DataInterface {
 
     public List<GlobeTaxon> getGlobeDataForDocument(long documentId) throws DatabaseOperationException {
         return executeOperationSafely((session) -> {
-            var taxonCommand = "SELECT DISTINCT t " +
+            return null;
+            // TODO: CLEANUP this is obsolete probably now.
+            /*var taxonCommand = "SELECT DISTINCT t " +
                     "FROM Document d " +
                     "JOIN d.taxons t " +
                     "JOIN GbifOccurrence go ON go.gbifTaxonId = t.gbifTaxonId " +
@@ -368,7 +445,7 @@ public class PostgresqlDataInterface_Impl implements DataInterface {
                 documents.add(doc);
             }
 
-            return documents;
+            return documents;*/
         });
     }
 
@@ -492,6 +569,19 @@ public class PostgresqlDataInterface_Impl implements DataInterface {
         return executeOperationSafely((session) -> session.doReturningWork((connection) -> {
             var insertedLex = 0;
             try (var storedProcedure = connection.prepareCall("{call refresh_links()}")) {
+                var result = storedProcedure.executeQuery();
+                while (result.next()) {
+                    insertedLex = result.getInt(1);
+                }
+            }
+            return insertedLex;
+        }));
+    }
+
+    public int callGeonameLocationRefresh() throws DatabaseOperationException {
+        return executeOperationSafely((session) -> session.doReturningWork((connection) -> {
+            var insertedLex = 0;
+            try (var storedProcedure = connection.prepareCall("{call update_geoname_locations()}")) {
                 var result = storedProcedure.executeQuery();
                 while (result.next()) {
                     insertedLex = result.getInt(1);
@@ -927,10 +1017,10 @@ public class PostgresqlDataInterface_Impl implements DataInterface {
             var root = criteriaQuery.from(Document.class);
 
             // Join with NamedEntity or other annotation entities via foreign key documentId
-            var namedEntityJoin = root.join(annotationName);
+            var annotationJoin = root.join(annotationName);
 
             criteriaQuery.select(root).distinct(true) // Ensure distinct documents
-                    .where(criteriaBuilder.equal(namedEntityJoin.get("coveredText"), coveredText));
+                    .where(criteriaBuilder.equal(annotationJoin.get("coveredText"), coveredText));
 
             // set the limit
             var docs = session.createQuery(criteriaQuery)
@@ -1057,10 +1147,54 @@ public class PostgresqlDataInterface_Impl implements DataInterface {
             Document doc = session.createQuery(criteriaQuery).uniqueResult();
 
             if (doc != null) {
-                Hibernate.initialize(doc.getPages());
-                Hibernate.initialize(doc.getUceMetadata());
+                initializeCompleteDocument(doc, 0, 999999);
             }
             return doc;
+        });
+    }
+
+    public List<String> getDistinctGeonamesNamesByFeatureCode(GeoNameFeatureClass featureClass, String featureCode, long corpusId, int limit) throws DatabaseOperationException {
+        return executeOperationSafely((session) -> {
+            // This with hibernate query builder doesn't work.
+            String hql = """
+                SELECT DISTINCT g.name
+                FROM GeoName g
+                JOIN Document d ON g.documentId = d.id
+                WHERE g.featureClass = :featureClass
+                  AND (:featureCode IS NULL OR g.featureCode = :featureCode)
+                  AND d.corpusId = :corpusId
+            """;
+
+            var query = session.createQuery(hql, String.class);
+            query.setParameter("featureClass", featureClass);
+            query.setParameter("featureCode", featureCode.isEmpty() ? null : featureCode);
+            query.setParameter("corpusId", corpusId);
+            query.setMaxResults(limit);
+
+            return query.getResultList();
+        });
+    }
+
+    public List<String> getDistinctGeonamesNamesByRadius(double longitude, double latitude, double radius, long corpusId, int limit) throws DatabaseOperationException {
+        return executeOperationSafely((session) -> {
+            // This with hibernate query builder doesn't work since we use Postgis location queries.
+            String sql = """
+                SELECT DISTINCT g.name
+                FROM geoname g
+                JOIN document d ON g.document_id = d.id
+                WHERE ST_DWithin(location_geog, CAST(ST_MakePoint(:longitude,:latitude) AS geography), :radius)
+                AND d.corpusId = :corpusId
+                LIMIT :limit
+            """;
+
+            var query = session.createNativeQuery(sql);
+            query.setParameter("longitude", longitude);
+            query.setParameter("latitude", latitude);
+            query.setParameter("radius", radius); // in meters
+            query.setParameter("corpusId", corpusId);
+            query.setParameter("limit", limit);
+
+            return query.getResultList();
         });
     }
 
@@ -1082,8 +1216,16 @@ public class PostgresqlDataInterface_Impl implements DataInterface {
         });
     }
 
+    public GeoName getGeoNameAnnotationById(long id) throws DatabaseOperationException {
+        return executeOperationSafely((session) -> session.get(GeoName.class, id));
+    }
+
     public Time getTimeAnnotationById(long id) throws DatabaseOperationException {
         return executeOperationSafely((session) -> session.get(Time.class, id));
+    }
+
+    public Sentence getSentenceAnnotationById(long id) throws DatabaseOperationException {
+        return executeOperationSafely((session) -> session.get(Sentence.class, id));
     }
 
     public long countLexiconEntries() throws DatabaseOperationException {
@@ -1104,8 +1246,16 @@ public class PostgresqlDataInterface_Impl implements DataInterface {
         return executeOperationSafely((session) -> session.get(NamedEntity.class, id));
     }
 
-    public Taxon getTaxonById(long id) throws DatabaseOperationException {
-        return executeOperationSafely((session) -> session.get(Taxon.class, id));
+    public GazetteerTaxon getGazetteerTaxonById(long id) throws DatabaseOperationException {
+        return executeOperationSafely((session) -> session.get(GazetteerTaxon.class, id));
+    }
+
+    public GnFinderTaxon getGnFinderTaxonById(long id) throws DatabaseOperationException {
+        return executeOperationSafely((session) -> session.get(GnFinderTaxon.class, id));
+    }
+
+    public BiofidTaxon getBiofidTaxonById(long id) throws DatabaseOperationException {
+        return executeOperationSafely((session) -> session.get(BiofidTaxon.class, id));
     }
 
     public Lemma getLemmaById(long id) throws DatabaseOperationException {
@@ -1240,6 +1390,15 @@ public class PostgresqlDataInterface_Impl implements DataInterface {
         });
     }
 
+    public void saveOrUpdateManyAnnotationLinks(List<AnnotationLink> links) throws DatabaseOperationException {
+        executeOperationSafely((session -> {
+            for (var link : links) {
+                session.saveOrUpdate(link);
+            }
+            return null;
+        }));
+    }
+
     public void saveOrUpdateManyDocumentToAnnotationLinks(List<DocumentToAnnotationLink> links) throws DatabaseOperationException {
         executeOperationSafely((session -> {
             for (var link : links) {
@@ -1356,7 +1515,6 @@ public class PostgresqlDataInterface_Impl implements DataInterface {
         });
     }
 
-
     public DocumentTopThreeTopics getDocumentTopThreeTopicsById(long id) throws DatabaseOperationException {
         return executeOperationSafely((session) -> {
             var dist = session.get(DocumentTopThreeTopics.class, id);
@@ -1441,7 +1599,6 @@ public class PostgresqlDataInterface_Impl implements DataInterface {
         });
     }
 
-
     public List<Object[]> getSimilarTopicsbyTopicLabel(String topicValue, long corpusId, int minSharedWords, int result_limit) throws DatabaseOperationException {
         return executeOperationSafely((session) -> {
             String sql = "SELECT * FROM find_similar_topics(:topicValue, :minSharedWords, :result_limit, :corpusId)";
@@ -1482,7 +1639,6 @@ public class PostgresqlDataInterface_Impl implements DataInterface {
             return topicWords.size() > 20 ? topicWords.subList(0, 20) : topicWords;
         });
     }
-
 
     public Map<String, Double> getTopNormalizedTopicsByCorpusId(long corpusId) throws DatabaseOperationException {
         return executeOperationSafely((session) -> {
@@ -1625,7 +1781,10 @@ public class PostgresqlDataInterface_Impl implements DataInterface {
         Hibernate.initialize(doc.getDocumentKeywordDistribution());
         Hibernate.initialize(doc.getSentences());
         Hibernate.initialize(doc.getNamedEntities());
-        Hibernate.initialize(doc.getTaxons());
+        Hibernate.initialize(doc.getGeoNames());
+        Hibernate.initialize(doc.getBiofidTaxons());
+        Hibernate.initialize(doc.getGazetteerTaxons());
+        Hibernate.initialize(doc.getGnFinderTaxons());
         Hibernate.initialize(doc.getTimes());
         Hibernate.initialize(doc.getWikipediaLinks());
         Hibernate.initialize(doc.getLemmas());

@@ -1,7 +1,11 @@
 package org.texttechnologylab.services;
 
 import org.texttechnologylab.exceptions.DatabaseOperationException;
+import org.texttechnologylab.models.biofid.BiofidTaxon;
+import org.texttechnologylab.models.biofid.GazetteerTaxon;
+import org.texttechnologylab.models.biofid.GnFinderTaxon;
 import org.texttechnologylab.models.corpus.*;
+import org.texttechnologylab.models.corpus.links.AnnotationLink;
 import org.texttechnologylab.models.corpus.links.AnnotationToDocumentLink;
 import org.texttechnologylab.models.corpus.links.DocumentLink;
 import org.texttechnologylab.models.corpus.links.DocumentToAnnotationLink;
@@ -12,6 +16,7 @@ import org.texttechnologylab.models.imp.ImportLog;
 import org.texttechnologylab.models.imp.UCEImport;
 import org.texttechnologylab.models.search.*;
 
+import java.lang.annotation.Annotation;
 import java.util.List;
 
 public interface DataInterface {
@@ -22,9 +27,9 @@ public interface DataInterface {
     public List<AnnotationSearchResult> getAnnotationsOfCorpus(long corpusId, int skip, int take) throws DatabaseOperationException;
 
     /**
-     * Returns all taxons (if any) that match the given string values AND their identifier column is not empty.
+     * Returns all biofidurls (if any) of biofidtaxon that match the given string values.
      */
-    public List<Taxon> getIdentifiableTaxonsByValues(List<String> tokens) throws DatabaseOperationException;
+    public List<String> getIdentifiableTaxonsByValue(String token) throws DatabaseOperationException;
 
     /**
      * Counts all documents within a given corpus
@@ -222,7 +227,7 @@ public interface DataInterface {
 
     /**
      * Gets a list of distinct documents that contain a named entity with a given covered text.
-     * @param annotationName Either "namedEntities" or "times". It's the list name of the annotations within a Document objects.
+     * @param annotationName Either "namedEntities", "times", "sentences". It's the **list name** of the annotations within a Document objects.
      */
     public List<Document> getDocumentsByAnnotationCoveredText(String coveredText, int limit, String annotationName) throws DatabaseOperationException;
 
@@ -233,9 +238,19 @@ public interface DataInterface {
     public List<Lemma> getLemmasWithinBeginAndEndOfDocument(int begin, int end, long documentId) throws DatabaseOperationException;
 
     /**
+     * Gets a GeoName annotation by its unique id.
+     */
+    public GeoName getGeoNameAnnotationById(long id) throws DatabaseOperationException;
+
+    /**
      * Gets a time annotation by its id
      */
     public Time getTimeAnnotationById(long id) throws DatabaseOperationException;
+
+    /**
+     * Returns a sentence annotation by its id.
+     */
+    public Sentence getSentenceAnnotationById(long id) throws DatabaseOperationException;
 
     /**
      * Counts the entries in the lexicon
@@ -252,10 +267,14 @@ public interface DataInterface {
      */
     public NamedEntity getNamedEntityById(long id) throws DatabaseOperationException;
 
+    public GazetteerTaxon getGazetteerTaxonById(long id) throws DatabaseOperationException;
+
+    public GnFinderTaxon getGnFinderTaxonById(long id) throws DatabaseOperationException;
+
     /**
      * Gets a single taxon by its id
      */
-    public Taxon getTaxonById(long id) throws DatabaseOperationException;
+    public BiofidTaxon getBiofidTaxonById(long id) throws DatabaseOperationException;
 
     /**
      * Gets a lemma by its id
@@ -326,6 +345,11 @@ public interface DataInterface {
      *  Saves or updates a list of documentLinks.
      */
     public void saveOrUpdateManyDocumentToAnnotationLinks(List<DocumentToAnnotationLink> links) throws DatabaseOperationException;
+
+    /**
+     * Saves or updates a list of annotation links.
+     */
+    public void saveOrUpdateManyAnnotationLinks(List<AnnotationLink> links) throws DatabaseOperationException;
 
     /**
      * Saves or updates a list of DocumentToAnnotation Links

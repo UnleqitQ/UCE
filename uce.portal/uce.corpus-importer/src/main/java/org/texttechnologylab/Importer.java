@@ -27,15 +27,18 @@ import org.texttechnologylab.config.CommonConfig;
 import org.texttechnologylab.config.CorpusConfig;
 import org.texttechnologylab.exceptions.DatabaseOperationException;
 import org.texttechnologylab.exceptions.ExceptionUtils;
+import org.texttechnologylab.models.UIMAAnnotation;
 import org.texttechnologylab.models.biofid.BiofidTaxon;
+import org.texttechnologylab.models.biofid.GazetteerTaxon;
+import org.texttechnologylab.models.biofid.GnFinderTaxon;
 import org.texttechnologylab.models.corpus.*;
+import org.texttechnologylab.models.corpus.links.AnnotationLink;
 import org.texttechnologylab.models.corpus.links.AnnotationToDocumentLink;
 import org.texttechnologylab.models.corpus.links.DocumentLink;
 import org.texttechnologylab.models.corpus.links.DocumentToAnnotationLink;
 import org.texttechnologylab.models.corpus.ocr.OCRPageAdapterImpl;
 import org.texttechnologylab.models.corpus.ocr.PageAdapter;
 import org.texttechnologylab.models.corpus.ocr.PageAdapterImpl;
-import org.texttechnologylab.models.gbif.GbifOccurrence;
 import org.texttechnologylab.models.imp.ImportLog;
 import org.texttechnologylab.models.imp.ImportStatus;
 import org.texttechnologylab.models.imp.LogStatus;
@@ -70,7 +73,7 @@ public class Importer {
 
     private static final Gson gson = new Gson();
     private static final Logger logger = LogManager.getLogger(Importer.class);
-    private static final int BATCH_SIZE = 250;
+    private static final int BATCH_SIZE = 2000;
     private static final Set<String> WANTED_NE_TYPES = Set.of(
             "LOCATION", "MISC", "PERSON", "ORGANIZATION"
     );
@@ -78,9 +81,9 @@ public class Importer {
     private static final Set<String> MIME_TYPES_PDF = Set.of("application/pdf", "pdf");
     private GoetheUniversityService goetheUniversityService;
     private PostgresqlDataInterface_Impl db;
-    private GbifService gbifService;
     private RAGService ragService;
     private JenaSparqlService jenaSparqlService;
+    private S3Storage s3Storage;
     private String path;
     private String importId;
     private Integer importerNumber;
@@ -111,7 +114,7 @@ public class Importer {
         this.ragService = serviceContext.getBean(RAGService.class);
         this.lexiconService = serviceContext.getBean(LexiconService.class);
         this.jenaSparqlService = serviceContext.getBean(JenaSparqlService.class);
-        this.gbifService = serviceContext.getBean(GbifService.class);
+        this.s3Storage = serviceContext.getBean(S3Storage.class);
     }
 
     /**
@@ -137,13 +140,13 @@ public class Importer {
     public void start(int numThreads) throws DatabaseOperationException {
         logger.info(
                 "\n _   _ _____  _____   _____                           _   \n" +
-                        "| | | /  __ \\|  ___| |_   _|                         | |  \n" +
-                        "| | | | /  \\/| |__     | | _ __ ___  _ __   ___  _ __| |_ \n" +
-                        "| | | | |    |  __|    | || '_ ` _ \\| '_ \\ / _ \\| '__| __|\n" +
-                        "| |_| | \\__/\\| |___   _| || | | | | | |_) | (_) | |  | |_ \n" +
-                        " \\___/ \\____/\\____/   \\___/_| |_| |_| .__/ \\___/|_|   \\__|\n" +
-                        "                                    | |                   \n" +
-                        "                                    |_|"
+                "| | | /  __ \\|  ___| |_   _|                         | |  \n" +
+                "| | | | /  \\/| |__     | | _ __ ___  _ __   ___  _ __| |_ \n" +
+                "| | | | |    |  __|    | || '_ ` _ \\| '_ \\ / _ \\| '__| __|\n" +
+                "| |_| | \\__/\\| |___   _| || | | | | | |_) | (_) | |  | |_ \n" +
+                " \\___/ \\____/\\____/   \\___/_| |_| |_| .__/ \\___/|_|   \\__|\n" +
+                "                                    | |                   \n" +
+                "                                    |_|"
         );
         logger.info("===========> Global Import Id: " + importId);
         logger.info("===========> Importer Number: " + importerNumber);
@@ -205,7 +208,7 @@ public class Importer {
                 final var corpusConfig1 = corpusConfig; // This sucks so hard - why doesn't java just do this itself if needed?
                 var existingCorpus = ExceptionUtils.tryCatchLog(() -> db.getCorpusByName(corpusConfig1.getName()),
                         (ex) -> logger.error("Error getting an existing corpus by name. The corpus config should probably be changed " +
-                                "to not add to existing corpus then.", ex));
+                                             "to not add to existing corpus then.", ex));
 
                 if (existingCorpus != null) { // If we have the corpus, use that. Else store the new corpus.
                     corpus = existingCorpus;
@@ -287,18 +290,25 @@ public class Importer {
                                         // Block other threads by not releasing the latch yet. We want the postprocessing being done by a single thread,
                                         // while all the others wait.
                                         logImportInfo("=========== UPDATING THE LOGICAL LINKS...", LogStatus.POST_PROCESSING, "LINKS", 0);
-                                        var result = ExceptionUtils.tryCatchLog(
+                                        var logicalLinksResult = ExceptionUtils.tryCatchLog(
                                                 () -> db.callLogicalLinksRefresh(),
                                                 (ex) -> logImportError("Error updating the logical links while postprocessing a batch.", ex, filePath.toString()));
-                                        if (result != null)
-                                            logImportInfo("=========== Finished updating the logical links. Inserted new links: " + result, LogStatus.SAVED, "LINKS", 0);
+                                        if (logicalLinksResult != null)
+                                            logImportInfo("=========== Finished updating the logical links. Inserted new links: " + logicalLinksResult, LogStatus.SAVED, "LINKS", 0);
 
                                         logImportInfo("=========== UPDATING THE LEXICON...", LogStatus.POST_PROCESSING, "LEXICON", 0);
-                                        var result2 = ExceptionUtils.tryCatchLog(
+                                        var lexiconResult = ExceptionUtils.tryCatchLog(
                                                 () -> lexiconService.updateLexicon(false),
                                                 (ex) -> logImportError("Error updating the lexicon while postprocessing a batch.", ex, filePath.toString()));
-                                        if (result2 != null)
-                                            logImportInfo("=========== Finished updating the lexicon. Inserted new lex: " + result2, LogStatus.SAVED, "LEXICON", 0);
+                                        if (lexiconResult != null)
+                                            logImportInfo("=========== Finished updating the lexicon. Inserted new lex: " + lexiconResult, LogStatus.SAVED, "LEXICON", 0);
+
+                                        logImportInfo("=========== UPDATING THE GEONAME LOCATIONS...", LogStatus.POST_PROCESSING, "GEONAME_LOCATION", 0);
+                                        var geonameLocationResult = ExceptionUtils.tryCatchLog(
+                                                () -> db.callGeonameLocationRefresh(),
+                                                (ex) -> logImportError("Error updating the geoname locations while postprocessing a batch.", ex, filePath.toString()));
+                                        if (geonameLocationResult != null)
+                                            logImportInfo("=========== Finished updating the geoname locations. Inserted new locations: " + geonameLocationResult, LogStatus.SAVED, "GEONAME_LOCATION", 0);
 
                                         logImportInfo("=========== POSTPROCESSING THE CORPUS...", LogStatus.POST_PROCESSING, "CORPUS", 0);
                                         postProccessCorpus(corpus1, corpusConfigFinal);
@@ -328,6 +338,11 @@ public class Importer {
         ExceptionUtils.tryCatchLog(
                 () -> lexiconService.updateLexicon(false),
                 (ex) -> logger.error("Error in the final lexicon update of the current corpus with id " + corpus1.getId()));
+
+        // Final geonames location updating
+        ExceptionUtils.tryCatchLog(
+                () -> db.callGeonameLocationRefresh(),
+                (ex) -> logger.error("Error in the final geoname location update of the current corpus with id " + corpus1.getId()));
 
         // Final corpus postprocessing
         ExceptionUtils.tryCatchLog(
@@ -416,6 +431,17 @@ public class Importer {
     }
 
     /**
+     * Upload input stream to minio s3 storage
+     *
+     * @param inputStream
+     * @param objectName
+     * @throws Exception
+     */
+    private void uploadInputStream(InputStream inputStream, String objectName) throws Exception {
+        this.s3Storage.uploadInputStream(inputStream, objectName, new HashMap<>());
+    }
+
+    /**
      * Convert a UIMA jCas to an OCRDocument
      */
     public Document XMIToDocument(JCas jCas, Corpus corpus, String filePath) {
@@ -453,7 +479,7 @@ public class Importer {
             var exists = db.documentExists(corpus.getId(), document.getDocumentId());
             if (exists) {
                 logger.info("Document with id " + document.getDocumentId()
-                        + " already exists in the corpus " + corpus.getId() + ".");
+                            + " already exists in the corpus " + corpus.getId() + ".");
                 logger.info("Checking if that document was also post-processed yet...");
                 var existingDoc = db.getDocumentByCorpusAndDocumentId(corpus.getId(), document.getDocumentId());
                 if (!existingDoc.isPostProcessed()) {
@@ -486,6 +512,12 @@ public class Importer {
 
             // For now, we skip this. This doesn't relly improve anything and is very costly.
             //setCleanedFullText(document, jCas);
+            if (corpusConfig.getOther().isEnableS3Storage()) {
+                ExceptionUtils.tryCatchLog(
+                        () -> uploadInputStream(openInputStreamBasedOnExtension(filePath), document.getDocumentId()),
+                        (ex) -> logImportWarn("Was not able to upload XMI to S3 Storage!", ex, filePath));
+            }
+
             if (corpusConfig.getAnnotations().isUceMetadata())
                 ExceptionUtils.tryCatchLog(
                         () -> setUceMetadata(document, jCas, corpus.getId()),
@@ -612,6 +644,10 @@ public class Importer {
             docLink.setLinkId(String.valueOf(l.getLinkId()));
             docLink.setType(l.getLinkType());
             docLink.setCorpusId(corpusId);
+            docLink.setFromAnnotationTypeTable(ReflectionUtils.getTableAnnotationName(Document.class));
+            docLink.setFromAnnotationType(Document.class.getName());
+            docLink.setToAnnotationTypeTable(ReflectionUtils.getTableAnnotationName(Document.class));
+            docLink.setToAnnotationType(Document.class.getName());
 
             documentLinks.add(docLink);
         });
@@ -625,6 +661,8 @@ public class Importer {
             var docToAnnoLink = new DocumentToAnnotationLink();
             docToAnnoLink.setCorpusId(corpusId);
             docToAnnoLink.setFrom(l.getFrom()); // from is a documentId, but not of *this* document.
+            docToAnnoLink.setFromAnnotationTypeTable(ReflectionUtils.getTableAnnotationName(Document.class));
+            docToAnnoLink.setFromAnnotationType(Document.class.getName());
             docToAnnoLink.setLinkId(String.valueOf(l.getLinkId()));
             docToAnnoLink.setType(l.getLinkType());
             // In the case of a Document -> Annotation, the "to" in the typesystem points to the current document
@@ -657,6 +695,8 @@ public class Importer {
             var annoToDocLink = new AnnotationToDocumentLink();
             annoToDocLink.setCorpusId(corpusId);
             annoToDocLink.setTo(l.getTo()); // to is a documentId, but not of *this* document.
+            annoToDocLink.setToAnnotationTypeTable(ReflectionUtils.getTableAnnotationName(Document.class));
+            annoToDocLink.setToAnnotationType(Document.class.getName());
             annoToDocLink.setLinkId(String.valueOf(l.getLinkId()));
             annoToDocLink.setType(l.getLinkType());
             // In the case of a Annotation -> Document, the "from" in the typesystem points to the current document
@@ -679,6 +719,10 @@ public class Importer {
 
             annotationToDocumentLinks.add(annoToDocLink);
         });
+
+        // TODO: Annotation -> Annotation Link
+        // TODO: CoveredText -> CoveredText
+
         db.saveOrUpdateManyAnnotationToDocumentLinks(annotationToDocumentLinks);
     }
 
@@ -783,8 +827,8 @@ public class Importer {
             if (documentAnnotation != null) {
                 try {
                     metadataTitleInfo.setPublished(documentAnnotation.getDateDay() + "."
-                            + documentAnnotation.getDateMonth() + "."
-                            + documentAnnotation.getDateYear());
+                                                   + documentAnnotation.getDateMonth() + "."
+                                                   + documentAnnotation.getDateYear());
                     metadataTitleInfo.setAuthor(documentAnnotation.getAuthor());
                 } catch (Exception ex) {
                     logger.warn("Tried extracting DocumentAnnotation type, it caused an error. Import will be continued as usual.");
@@ -869,15 +913,33 @@ public class Importer {
     }
 
     private void updateAnnotationsWithPageId(Document document, Page page, boolean isLastPage) {
-        // Set the pages for the different annotations
-        if (document.getBiofidTaxons() != null) {
-            for (var anno : document.getBiofidTaxons().stream().filter(t ->
+        // Set the pages for the different annotations - this is pretty horrible, but I cant be bothered right now.
+        if (document.getSentences() != null) {
+            for (var anno : document.getSentences().stream().filter(t ->
                     (t.getBegin() >= page.getBegin() && t.getEnd() <= page.getEnd()) || (t.getPage() == null && isLastPage)).toList()) {
                 anno.setPage(page);
             }
         }
-        if (document.getTaxons() != null) {
-            for (var anno : document.getTaxons().stream().filter(t ->
+        if (document.getLemmas() != null) {
+            for (var anno : document.getLemmas().stream().filter(t ->
+                    (t.getBegin() >= page.getBegin() && t.getEnd() <= page.getEnd()) || (t.getPage() == null && isLastPage)).toList()) {
+                anno.setPage(page);
+            }
+        }
+        if (document.getGazetteerTaxons() != null) {
+            for (var anno : document.getGazetteerTaxons().stream().filter(t ->
+                    (t.getBegin() >= page.getBegin() && t.getEnd() <= page.getEnd()) || (t.getPage() == null && isLastPage)).toList()) {
+                anno.setPage(page);
+            }
+        }
+        if (document.getGnFinderTaxons() != null) {
+            for (var anno : document.getGnFinderTaxons().stream().filter(t ->
+                    (t.getBegin() >= page.getBegin() && t.getEnd() <= page.getEnd()) || (t.getPage() == null && isLastPage)).toList()) {
+                anno.setPage(page);
+            }
+        }
+        if (document.getBiofidTaxons() != null) {
+            for (var anno : document.getBiofidTaxons().stream().filter(t ->
                     (t.getBegin() >= page.getBegin() && t.getEnd() <= page.getEnd()) || (t.getPage() == null && isLastPage)).toList()) {
                 anno.setPage(page);
             }
@@ -958,29 +1020,71 @@ public class Importer {
      * Selects taxnomies and tries to enrich specific biofid onthologies as well.
      */
     private void setTaxonomy(Document document, JCas jCas, CorpusConfig corpusConfig) {
-        var taxons = new ArrayList<Taxon>();
-        var biofidTaxons = new ArrayList<BiofidTaxon>();
+        var biofidTaxa = new ArrayList<BiofidTaxon>();
 
+        // Handle Verified GNFinder taxa
+        var gnFinderTaxa = new ArrayList<GnFinderTaxon>();
+        JCasUtil.select(jCas, org.texttechnologylab.annotation.biofid.gnfinder.VerifiedTaxon.class).forEach(t -> {
+            var taxon = new GnFinderTaxon(t.getBegin(), t.getEnd());
+            taxon.setValue(t.getValue());
+            taxon.setDocument(document);
+            taxon.setCoveredText(t.getCoveredText());
+            taxon.setIdentifier(t.getIdentifier());
+            ExceptionUtils.tryCatchLog(
+                    () -> taxon.setRecordId(Long.parseLong(Arrays.stream(taxon.getIdentifier().split("/")).toList().getLast())),
+                    (ex) -> logger.warn("Setting the recordId of a Taxon failed, but continuing the import: ", ex));
+            taxon.setOddsLog10(t.getOddsLog10());
+            taxon.setMatchedName(t.getMatchedName());
+            taxon.setMatchedCanonical(t.getMatchedCanonicalFull());
+
+            var biofidUrl = StringUtils.BIOFID_URL_BASE + taxon.getRecordId();
+            var newBiofidTaxons = ExceptionUtils.tryCatchLog(
+                    () -> jenaSparqlService.queryBiofidTaxon(biofidUrl),
+                    (ex) -> logger.error("Error building a BiofidTaxon object from a potential id.", ex));
+            if (newBiofidTaxons != null) {
+                for (var biofidTaxon : newBiofidTaxons) {
+                    biofidTaxon.setCoveredText(t.getCoveredText());
+                    biofidTaxon.setBegin(t.getBegin());
+                    biofidTaxon.setEnd(t.getEnd());
+                    biofidTaxon.setDocument(document);
+                    biofidTaxon.setBiofidUrl(biofidUrl);
+                    biofidTaxon.setOriginalAnnotatedTaxonTable(ReflectionUtils.getTableAnnotationName(GnFinderTaxon.class));
+                    biofidTaxa.add(biofidTaxon);
+                }
+            }
+            gnFinderTaxa.add(taxon);
+        });
+        document.setGnFinderTaxons(gnFinderTaxa);
+
+        // Handle Gazetteer Taxa
+        var gazetteerTaxa = new ArrayList<GazetteerTaxon>();
         JCasUtil.select(jCas, org.texttechnologylab.annotation.type.Taxon.class).forEach(t -> {
-            var taxon = new Taxon(t.getBegin(), t.getEnd());
+            var taxon = new GazetteerTaxon(t.getBegin(), t.getEnd());
             taxon.setDocument(document);
             taxon.setValue(t.getValue());
             taxon.setCoveredText(t.getCoveredText());
             taxon.setIdentifier(t.getIdentifier());
-            // We need to handle taxons specifically, depending on whether they have annotated identifiers.
-            if (corpusConfig.getAnnotations().getTaxon().isBiofidOnthologyAnnotated() && taxon.getIdentifier() != null && !taxon.getIdentifier().isEmpty()) {
-                // The recognized taxons should be split by a |
-                var occurrences = new ArrayList<GbifOccurrence>();
+
+            // We need to handle taxa specifically, depending on whether they have annotated identifiers.
+            if (taxon.getIdentifier() != null && !taxon.getIdentifier().isEmpty()) {
+
+                // The recognized taxa should be split by a |
                 var splited = new ArrayList<String>();
+
                 // Sometimes they are delimitered by |, sometimes by space - who knows in this dump? :)
                 for (var split : taxon.getIdentifier().split("\\|")) {
                     splited.addAll(Arrays.asList(split.split(" ")));
                 }
+                if (splited.isEmpty()) return;
 
+                // Set the primary ids and identifier
+                taxon.setPrimaryIdentifier(splited.getFirst());
+                ExceptionUtils.tryCatchLog(
+                        () -> taxon.setRecordId(Long.parseLong(Arrays.stream(taxon.getPrimaryIdentifier().split("/")).toList().getLast())),
+                        (ex) -> logger.warn("Setting the recordId of a Taxon failed, but continuing the import: ", ex));
+
+                // The potential biofid urls are like: https://www.biofid.de/bio-ontologies/gbif/10428508
                 for (var potentialBiofidId : splited) {
-                    // The biofid urls are like: https://www.biofid.de/bio-ontologies/gbif/10428508
-                    // We need the last number in that string, have a lookup into our sparql database and from there fetch the
-                    // correct TaxonId
                     if (potentialBiofidId.isEmpty()) continue;
 
                     // Before we do GbifOccurence stuff, we build specific BiofidTaxon objects if we can.
@@ -994,40 +1098,17 @@ public class Importer {
                             biofidTaxon.setEnd(t.getEnd());
                             biofidTaxon.setDocument(document);
                             biofidTaxon.setBiofidUrl(potentialBiofidId);
-                            biofidTaxons.add(biofidTaxon);
+                            biofidTaxon.setOriginalAnnotatedTaxonTable(ReflectionUtils.getTableAnnotationName(GazetteerTaxon.class));
+                            biofidTaxa.add(biofidTaxon);
                         }
                     }
-
-                    var taxonId = ExceptionUtils.tryCatchLog(
-                            () -> jenaSparqlService.biofidIdUrlToGbifTaxonId(potentialBiofidId),
-                            (ex) -> logger.error("Error getting the taxonId of a biofid annotation while importing.", ex));
-                    if (taxonId == null || taxonId == -1) continue;
-                    taxon.setGbifTaxonId(taxonId);
-
-                    // Now check if we already have stored occurences for that taxon - we don't need to do that again then.
-                    // We need to check in the current loop and in the database.
-                    if (taxons.stream().anyMatch(ta -> ta.getGbifTaxonId() == taxonId)) break;
-                    var is = ExceptionUtils.tryCatchLog(() -> db.checkIfGbifOccurrencesExist(taxonId),
-                            (ex) -> logger.error("Error checking if taxon occurrence already exists.", ex));
-                    if (is == null || is) break;
-
-                    // Otherwise, fetch new occurrences.
-                    var potentialOccurrences = ExceptionUtils.tryCatchLog(
-                            () -> gbifService.scrapeGbifOccurrence(taxonId),
-                            (ex) -> logger.error("Error scraping the gbif occurrence of taxonId: " + taxonId, ex));
-                    if (potentialOccurrences != null && !potentialOccurrences.isEmpty()) {
-                        occurrences.addAll(potentialOccurrences);
-                        taxon.setPrimaryBiofidOntologyIdentifier(potentialBiofidId);
-                        break;
-                    }
                 }
-                taxon.setGbifOccurrences(occurrences);
             }
-            taxons.add(taxon);
+            gazetteerTaxa.add(taxon);
         });
-        document.setTaxons(taxons);
-        document.setBiofidTaxons(biofidTaxons);
-        logger.info("Setting Taxons done.");
+        document.setGazetteerTaxons(gazetteerTaxa);
+        document.setBiofidTaxons(biofidTaxa);
+        logger.info("Setting Taxa done.");
     }
 
     /**
@@ -1041,7 +1122,7 @@ public class Importer {
             time.setCoveredText(t.getCoveredText());
 
             // Let's see if we can dissect the raw time string into more usable formats for our db.
-            var units = RegexUtils.DissectTimeAnnotationString(time.getCoveredText());
+            var units = RegexUtils.dissectTimeAnnotationString(time.getCoveredText());
             time.setYear(units.year);
             time.setMonth(units.month);
             time.setDay(units.day);
@@ -1519,6 +1600,62 @@ public class Importer {
         var start = System.currentTimeMillis();
         var corpusConfig = corpus.getViewModel().getCorpusConfig();
 
+        // Store simple connections between Time, Geonames and Annotation to approximate the question:
+        // This annotation occurred in context with this location at this time.
+        // TODO: This needs a check if the document already was linked before. Sometimes docs are preprocessed when they already exist.
+        if (corpusConfig.getAnnotations().isGeoNames() || corpusConfig.getAnnotations().isTime()) {
+            logger.info("Doing contextualized Links between Annotations...");
+            // For now we assume that, IF the annotations are on the same page, they are somewhat linked.
+            // For now, we link NamedEntities and taxa to Geonames and/or Time
+            for (var page : document.getPages()) {
+
+                // Geonames and Times
+                var contextAnnotations = new ArrayList<UIMAAnnotation>();
+                if (corpusConfig.getAnnotations().isGeoNames())
+                    contextAnnotations.addAll(document.getGeoNames().stream().filter(g -> g.getBegin() >= page.getBegin() && g.getEnd() <= page.getEnd()).toList());
+                if (corpusConfig.getAnnotations().isTime())
+                    contextAnnotations.addAll(document.getTimes().stream().filter(g -> g.getBegin() >= page.getBegin() && g.getEnd() <= page.getEnd()).toList());
+
+                // Link them to other annotations, such as Taxa, NamedEntity (e.g. PERSON)
+                var linkedAnnotations = new ArrayList<UIMAAnnotation>();
+                if (corpusConfig.getAnnotations().isNamedEntity())
+                    linkedAnnotations.addAll(document.getNamedEntities().stream().filter(g -> !g.getType().equals("LOCATION") && g.getBegin() >= page.getBegin() && g.getEnd() <= page.getEnd()).toList());
+                if (corpusConfig.getAnnotations().getTaxon().isAnnotated()) {
+                    linkedAnnotations.addAll(document.getGazetteerTaxons().stream().filter(g -> g.getBegin() >= page.getBegin() && g.getEnd() <= page.getEnd()).toList());
+                    linkedAnnotations.addAll(document.getGnFinderTaxons().stream().filter(g -> g.getBegin() >= page.getBegin() && g.getEnd() <= page.getEnd()).toList());
+                }
+
+                // We link FROM the ANNOTATION TO the CONTEXT
+                var links = new ArrayList<AnnotationLink>();
+                for (var context : contextAnnotations) {
+                    for (var anno : linkedAnnotations) {
+                        var annoLink = new AnnotationLink();
+                        annoLink.setCorpusId(corpus.getId());
+                        annoLink.setFrom(document.getDocumentId());
+                        annoLink.setTo(document.getDocumentId());
+                        annoLink.setType(context instanceof Time ? "time" : "location");
+                        annoLink.setLinkId("context");
+                        annoLink.setFromId(anno.getId());
+                        annoLink.setToId(context.getId());
+                        annoLink.setFromAnnotationTypeTable(ReflectionUtils.getTableAnnotationName(anno.getClass()));
+                        annoLink.setToAnnotationTypeTable(ReflectionUtils.getTableAnnotationName(context.getClass()));
+                        annoLink.setFromAnnotationType(anno.getClass().getName());
+                        annoLink.setToAnnotationType(context.getClass().getName());
+                        annoLink.setFromCoveredText(anno.getCoveredText());
+                        annoLink.setToCoveredText(context.getCoveredText());
+                        annoLink.setFromBegin(anno.getBegin());
+                        annoLink.setToBegin(context.getBegin());
+                        annoLink.setFromEnd(anno.getEnd());
+                        annoLink.setToEnd(context.getEnd());
+
+                        links.add(annoLink);
+                    }
+                }
+                ExceptionUtils.tryCatchLog(() -> db.saveOrUpdateManyAnnotationLinks(links),
+                        (ex) -> logImportError("Couldn't build contextual annotation links while postprocessing.", ex, filePath));
+            }
+        }
+
         // Calculate embeddings if they are activated
         if (corpusConfig.getOther().isEnableEmbeddings()) {
             logger.info("Embeddings...");
@@ -1684,7 +1821,6 @@ public class Importer {
                 }
             }
         }
-
 
         logImportInfo("Successfully post processed document " + filePath, LogStatus.SAVED, filePath, System.currentTimeMillis() - start);
     }

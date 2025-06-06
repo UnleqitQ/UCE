@@ -1,7 +1,11 @@
 package org.texttechnologylab.models;
 
 import io.micrometer.common.lang.Nullable;
+import lombok.Getter;
+import lombok.Setter;
+import org.texttechnologylab.models.biofid.BiofidTaxon;
 import org.texttechnologylab.models.corpus.*;
+import org.texttechnologylab.models.corpus.links.AnnotationLink;
 import org.texttechnologylab.models.corpus.links.AnnotationToDocumentLink;
 import org.texttechnologylab.models.corpus.links.DocumentLink;
 import org.texttechnologylab.models.corpus.links.DocumentToAnnotationLink;
@@ -9,8 +13,7 @@ import org.texttechnologylab.models.negation.*;
 import org.texttechnologylab.models.topic.UnifiedTopic;
 import org.texttechnologylab.utils.StringUtils;
 
-import javax.persistence.Column;
-import javax.persistence.MappedSuperclass;
+import javax.persistence.*;
 import java.util.*;
 import java.util.concurrent.atomic.AtomicInteger;
 
@@ -19,7 +22,7 @@ public class UIMAAnnotation extends ModelBase implements Linkable {
 
     @Override
     public List<Class<? extends ModelBase>> getCompatibleLinkTypes() {
-        return List.of(DocumentToAnnotationLink.class, AnnotationToDocumentLink.class);
+        return List.of(DocumentToAnnotationLink.class, AnnotationToDocumentLink.class, AnnotationLink.class);
     }
 
     @Override
@@ -36,6 +39,17 @@ public class UIMAAnnotation extends ModelBase implements Linkable {
     private Boolean isLexicalized = false;
     @Column(name = "document_id", insertable = false, updatable = false)
     private Long documentId;
+
+    @Getter
+    @Setter
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "page_id", nullable = true)
+    private Page page;
+
+    @Getter
+    @Setter
+    @Column(name = "page_id", insertable = false, updatable = false)
+    private Long pageId;
 
     public String getCoveredText() {
         return coveredText;
@@ -224,7 +238,11 @@ public class UIMAAnnotation extends ModelBase implements Linkable {
             return String.format(
                     "<span class='open-wiki-page annotation custom-context-menu ne-%1$s' title='%2$s' data-wid='%3$s' data-wcovered='%4$s'>",
                     ne.getType(), includeTitle ? ne.getCoveredText() : "", ne.getWikiId(), ne.getCoveredText());
-        } else if (annotation instanceof Time time) {
+        } else if(annotation instanceof GeoName geoName){
+            return String.format(
+                    "<span class='open-wiki-page annotation custom-context-menu geoname' title='%1$s' data-wid='%2$s' data-wcovered='%3$s'>",
+                    includeTitle ? geoName.getName() : "", geoName.getWikiId(), geoName.getCoveredText());
+        }else if (annotation instanceof Time time) {
             return String.format(
                     "<span class='open-wiki-page annotation custom-context-menu time' title='%1$s' data-wid='%2$s' data-wcovered='%3$s'>",
                     includeTitle ? time.getCoveredText() : "", time.getWikiId(), time.getCoveredText());

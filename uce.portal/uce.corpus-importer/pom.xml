@@ -80,21 +80,11 @@
             <version>${project.version}</version>
         </dependency>
 
-        <!-- Global reference -->
-        <!--<dependency>
+        <dependency>
             <groupId>com.github.texttechnologylab</groupId>
             <artifactId>UIMATypeSystem</artifactId>
-            <version>3.0.10</version>
-        </dependency>-->
-
-        <!-- Own Fork reference -->
-        <dependency>
-            <groupId>com.github.TheItCrOw</groupId>
-            <artifactId>UIMATypeSystem</artifactId>
-            <version>3.0.10</version>
+            <version>1c31dddaf</version>
         </dependency>
-
-        <!-- Local reference -->
         <!--<dependency>
             <groupId>org.texttechnologylab.annotation</groupId>
             <artifactId>typesystem</artifactId>

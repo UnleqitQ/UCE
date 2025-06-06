@@ -1,7 +1,3 @@
--- Enable the pg_trgm extension, if not already enabled
-CREATE EXTENSION IF NOT EXISTS pg_trgm;
-CREATE EXTENSION IF NOT EXISTS btree_gin;
-
 -- Some standard indexes on title and such
 CREATE INDEX IF NOT EXISTS idx_metadatatitleinfo_title ON metadatatitleinfo (title);
 CREATE INDEX IF NOT EXISTS idx_metadatatitleinfo_published ON metadatatitleinfo (published);
@@ -22,7 +18,9 @@ CREATE INDEX IF NOT EXISTS idx_metadatatitleinfo_author_trgm ON metadatatitleinf
 -- Create trigram indexes on the 'coveredtext' columns for the relevant tables
 CREATE INDEX IF NOT EXISTS idx_namedentity_coveredtext_trgm ON namedentity USING gin (coveredtext gin_trgm_ops);
 CREATE INDEX IF NOT EXISTS idx_time_coveredtext_trgm ON time USING gin (coveredtext gin_trgm_ops);
-CREATE INDEX IF NOT EXISTS idx_taxon_coveredtext_trgm ON taxon USING gin (coveredtext gin_trgm_ops);
+CREATE INDEX IF NOT EXISTS idx_biofidtaxon_coveredtext_trgm ON biofidtaxon USING gin (coveredtext gin_trgm_ops);
+CREATE INDEX IF NOT EXISTS idx_biofidtaxon_primaryname_trgm ON biofidtaxon USING gin (primaryname gin_trgm_ops);
+CREATE INDEX IF NOT EXISTS idx_sentence_coveredtext_trgm ON sentence USING gin (coveredtext gin_trgm_ops);
 
 -- For the metadata lemma search, we use coveredtext and value of the column, which is why we add them both in the index as well.
 CREATE INDEX IF NOT EXISTS idx_lemma_coveredtext_trgm ON lemma USING gin ((value || ' ' || coveredtext) gin_trgm_ops); 
@@ -42,7 +40,7 @@ CREATE INDEX IF NOT EXISTS idx_document_corpusid ON document (corpusid) INCLUDE 
 -- Since we look for annotations a lot:
 CREATE INDEX IF NOT EXISTS idx_namedentity_document_id ON namedentity (document_id);
 CREATE INDEX IF NOT EXISTS idx_time_document_id ON time (document_id);
-CREATE INDEX IF NOT EXISTS idx_taxon_document_id ON taxon (document_id);
+CREATE INDEX IF NOT EXISTS idx_taxon_document_id ON biofidtaxon (document_id);
 CREATE INDEX IF NOT EXISTS idx_lemma_document_id ON lemma (document_id);
 
 -- For the semantic role labels
@@ -57,22 +55,17 @@ CREATE INDEX IF NOT EXISTS idx_srlink_groundcoveredtext ON srlink(LOWER(groundco
 -- Create indexes on our lexicon.
 CREATE INDEX IF NOT EXISTS idx_lexicon_coveredtext_lower_trgm ON lexicon USING gin (lower(coveredtext) gin_trgm_ops);
 
--- Create a Generated Column for the "taxon" value column that splits the values x|y|z into its own array
-DO $$
-BEGIN
-    -- Check if the value_array column exists in the taxon table
-    IF NOT EXISTS (
-        SELECT 1
-        FROM information_schema.columns
-        WHERE table_name = 'taxon' AND column_name = 'value_array'
-    ) THEN
-        -- Add the generated column, and remove occurrences of " before splitting
-        ALTER TABLE taxon
-        ADD COLUMN value_array TEXT[] GENERATED ALWAYS AS (string_to_array(REPLACE(valuee, '"', ''), '|')) STORED;
-    END IF;
-END
-$$;
+-- Create indexes for the Logical Links
+CREATE INDEX IF NOT EXISTS idx_links_fromid_partial ON annotationlink(fromid) WHERE fromid IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_links_toid_partial ON annotationlink(toid) WHERE toid IS NOT NULL;
 
--- Add the index on the value_array column
-CREATE INDEX IF NOT EXISTS idx_taxon_value_array ON taxon USING gin (value_array);
+-- Create indexes for the Geoname Locations and Postgis in general
+CREATE INDEX IF NOT EXISTS idx_geoname_location_geog ON geoname USING GIST(location_geog);
+CREATE INDEX IF NOT EXISTS idx_geoname_location_geom ON geoname USING GIST(location_geom);
+
+-- Add imortant indexes to the materialized view of the timeline map:
+CREATE INDEX IF NOT EXISTS idx_geom ON geoname_context_timeline_cache USING GIST (location_geom);
+CREATE INDEX IF NOT EXISTS idx_date ON geoname_context_timeline_cache (date);
+CREATE INDEX IF NOT EXISTS idx_corpus ON geoname_context_timeline_cache (corpusid);
+CREATE INDEX IF NOT EXISTS idx_corpus_date ON geoname_context_timeline_cache (corpusid, date);
 
