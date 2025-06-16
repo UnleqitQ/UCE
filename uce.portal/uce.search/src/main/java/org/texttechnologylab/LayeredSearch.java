@@ -72,7 +72,7 @@ public class LayeredSearch extends CacheItem {
     /**
      * Takes in a layer of any depth and updates the corresponding layered search with the information.
      */
-    public void updateLayers(ArrayList<LayeredSearchLayerDto> layerDtos) throws DatabaseOperationException {
+    public void updateLayers(List<LayeredSearchLayerDto> layerDtos) throws DatabaseOperationException {
         for (var layer : layerDtos) {
             var existingLayer = this.layers.stream().filter(l -> l.getDepth() == layer.getDepth()).findFirst();
             // If we have a layer of that depth, check if its dirty (the slots changed its value)

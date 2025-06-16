@@ -19,10 +19,7 @@ import org.texttechnologylab.models.biofid.GnFinderTaxon;
 import org.texttechnologylab.models.corpus.links.AnnotationToDocumentLink;
 import org.texttechnologylab.models.corpus.links.DocumentLink;
 import org.texttechnologylab.models.corpus.links.DocumentToAnnotationLink;
-import org.texttechnologylab.models.corpus.links.Link;
 import org.texttechnologylab.models.negation.*;
-import org.texttechnologylab.models.search.AnnotationSearchResult;
-import org.texttechnologylab.models.search.PageSnippet;
 import org.texttechnologylab.models.topic.TopicValueBase;
 import org.texttechnologylab.models.topic.TopicValueBaseWithScore;
 import org.texttechnologylab.models.topic.UnifiedTopic;
@@ -297,8 +294,8 @@ public class Document extends ModelBase implements WikiModel, Linkable {
         int offsetStart = Math.max(annotation.getBegin() - 150, 0);
         int offsetEnd = Math.min(annotation.getEnd() + 150, annotation.getBegin() + 500);
         String snippet = getFullTextSnippetCharOffset(offsetStart, offsetEnd);
-        List<ArrayList<Integer>> offsetList = new ArrayList<>();
-        ArrayList<Integer> offsetArray = new ArrayList<>();
+        List<List<Integer>> offsetList = new ArrayList<>();
+        List<Integer> offsetArray = new ArrayList<>();
         offsetArray.add(annotation.getBegin());
         offsetArray.add(annotation.getEnd());
         offsetList.add(offsetArray);
@@ -307,12 +304,12 @@ public class Document extends ModelBase implements WikiModel, Linkable {
 
     public String getFullTextSnippetOffsetList(TemplateModel model) throws TemplateModelException {
         if (model instanceof TemplateSequenceModel) {
-            List<ArrayList<Integer>> offsetList = FreemarkerUtils.convertToNestedIntegerList((TemplateSequenceModel) model);
+            List<List<Integer>> offsetList = FreemarkerUtils.convertToNestedIntegerList((TemplateSequenceModel) model);
 
 
             int minBegin = 999999999;
             int maxEnd = 0;
-            for (ArrayList<Integer> offset : offsetList) {
+            for (List<Integer> offset : offsetList) {
                 if (minBegin > offset.getFirst()) {
                     minBegin = offset.getFirst();
                 }
@@ -320,7 +317,7 @@ public class Document extends ModelBase implements WikiModel, Linkable {
                     maxEnd = offset.getLast();
                 }
             }
-            for (ArrayList<Integer> pair : offsetList) {
+            for (List<Integer> pair : offsetList) {
                 for (int i = 0; i < pair.size(); i++) {
                     pair.set(i, pair.get(i) - Math.max(minBegin - 100, 0));
                 }

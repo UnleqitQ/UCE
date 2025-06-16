@@ -42,23 +42,23 @@ public class SearchState extends CacheItem {
     private OrderByColumn orderBy = OrderByColumn.RANK;
     private KeywordInContextState keywordInContextState;
 
-    private ArrayList<AnnotationSearchResult> foundNamedEntities = new ArrayList<>();
-    private ArrayList<AnnotationSearchResult> foundTimes = new ArrayList<>();
-    private ArrayList<AnnotationSearchResult> foundTaxons = new ArrayList<>();
+    private List<AnnotationSearchResult> foundNamedEntities = new ArrayList<>();
+    private List<AnnotationSearchResult> foundTimes = new ArrayList<>();
+    private List<AnnotationSearchResult> foundTaxons = new ArrayList<>();
 
     // Negation
-    private ArrayList<AnnotationSearchResult> foundScopes = new ArrayList<>();
-    private ArrayList<AnnotationSearchResult> foundCues = new ArrayList<>();
-    private ArrayList<AnnotationSearchResult> foundXScopes = new ArrayList<>();
-    private ArrayList<AnnotationSearchResult> foundFoci = new ArrayList<>();
-    private ArrayList<AnnotationSearchResult> foundEvents = new ArrayList<>();
+    private List<AnnotationSearchResult> foundScopes = new ArrayList<>();
+    private List<AnnotationSearchResult> foundCues = new ArrayList<>();
+    private List<AnnotationSearchResult> foundXScopes = new ArrayList<>();
+    private List<AnnotationSearchResult> foundFoci = new ArrayList<>();
+    private List<AnnotationSearchResult> foundEvents = new ArrayList<>();
 
 
 
     /**
      * This is only filled when the search layer contains embeddings
      */
-    private ArrayList<DocumentChunkEmbeddingSearchResult> foundDocumentChunkEmbeddings;
+    private List<DocumentChunkEmbeddingSearchResult> foundDocumentChunkEmbeddings;
 
     private String primarySearchLayer;
 
@@ -71,9 +71,9 @@ public class SearchState extends CacheItem {
      * This is currently not used.
      */
     private List<Integer> currentDocumentHits;
-    private HashMap<Integer, ArrayList<PageSnippet>> documentIdxToSnippet;
-    private HashMap<Long, ArrayList<PageSnippet>> documentIdToSnippet;
-    private HashMap<Integer, Float> documentIdxToRank;
+    private Map<Integer, List<PageSnippet>> documentIdxToSnippet;
+    private Map<Long, List<PageSnippet>> documentIdToSnippet;
+    private Map<Integer, Float> documentIdxToRank;
 
     public SearchState(SearchType searchType) {
         this.searchType = searchType;
@@ -143,7 +143,7 @@ public class SearchState extends CacheItem {
         return -1;
     }
 
-    public void setDocumentIdxToRank(HashMap<Integer, Float> documentIdxToRank) {
+    public void setDocumentIdxToRank(Map<Integer, Float> documentIdxToRank) {
         this.documentIdxToRank = documentIdxToRank;
     }
 
@@ -159,13 +159,13 @@ public class SearchState extends CacheItem {
         this.uceMetadataFilters = uceMetadataFilters;
     }
 
-    public ArrayList<PageSnippet> getPossibleSnippetsOfDocumentIdx(Integer idx) {
+    public List<PageSnippet> getPossibleSnippetsOfDocumentIdx(Integer idx) {
         if (this.documentIdxToSnippet != null && this.documentIdxToSnippet.containsKey(idx))
             return this.documentIdxToSnippet.get(idx);
         return null;
     }
 
-    public ArrayList<PageSnippet> getPossibleSnippetsOfDocumentId(long id) {
+    public List<PageSnippet> getPossibleSnippetsOfDocumentId(long id) {
         if (this.documentIdToSnippet != null && this.documentIdToSnippet.containsKey(id))
             return this.documentIdToSnippet.get(id);
         return null;
@@ -175,7 +175,7 @@ public class SearchState extends CacheItem {
         return this.created;
     }
 
-    public void setDocumentIdxToSnippets(HashMap<Integer, ArrayList<PageSnippet>> map) {
+    public void setDocumentIdxToSnippets(Map<Integer, List<PageSnippet>> map) {
         this.documentIdxToSnippet = map;
 
         // Whenever we set documents within a fulltext search, we should have found snippets.
@@ -193,7 +193,7 @@ public class SearchState extends CacheItem {
         }
     }
 
-    public void setDocumentIdToSnippets(HashMap<Long, ArrayList<PageSnippet>> map) {
+    public void setDocumentIdToSnippets(Map<Long, List<PageSnippet>> map) {
         this.documentIdToSnippet = map;
 
         // Whenever we set documents within a fulltext search, we should have found snippets.
@@ -247,19 +247,19 @@ public class SearchState extends CacheItem {
         this.searchType = searchType;
     }
 
-    public ArrayList<AnnotationSearchResult> getFoundTimes() {
+    public List<AnnotationSearchResult> getFoundTimes() {
         return foundTimes;
     }
 
-    public ArrayList<AnnotationSearchResult> getFoundTaxons() {
+    public List<AnnotationSearchResult> getFoundTaxons() {
         return foundTaxons;
     }
 
-    public ArrayList<DocumentChunkEmbeddingSearchResult> getFoundDocumentChunkEmbeddings() {
+    public List<DocumentChunkEmbeddingSearchResult> getFoundDocumentChunkEmbeddings() {
         return foundDocumentChunkEmbeddings;
     }
 
-    public void setFoundDocumentChunkEmbeddings(ArrayList<DocumentChunkEmbeddingSearchResult> foundDocumentChunkEmbeddings) {
+    public void setFoundDocumentChunkEmbeddings(List<DocumentChunkEmbeddingSearchResult> foundDocumentChunkEmbeddings) {
         this.foundDocumentChunkEmbeddings = foundDocumentChunkEmbeddings;
     }
 
@@ -350,28 +350,28 @@ public class SearchState extends CacheItem {
         return foundNamedEntities.stream().filter(ne -> ne.getInfo().equals(type)).skip(skip).limit(take).toList();
     }
 
-    public ArrayList<AnnotationSearchResult> getFoundNamedEntities() {
+    public List<AnnotationSearchResult> getFoundNamedEntities() {
         return foundNamedEntities;
     }
 
-    public void setFoundNamedEntities(ArrayList<AnnotationSearchResult> foundNamedEntities) {
+    public void setFoundNamedEntities(List<AnnotationSearchResult> foundNamedEntities) {
         // We have so much wrong annotations like . or a - dont show those which are shorter than 2 characters.
         this.foundNamedEntities = new ArrayList<>(foundNamedEntities.stream().filter(e -> e.getCoveredText().length() > 2).sorted(Comparator.comparingInt(AnnotationSearchResult::getOccurrences).reversed()).toList());
     }
 
-    public ArrayList<AnnotationSearchResult> getFoundTimes(int skip, int take) {
+    public List<AnnotationSearchResult> getFoundTimes(int skip, int take) {
         return new ArrayList<>(foundTimes.stream().skip(skip).limit(take).toList());
     }
 
-    public void setFoundTimes(ArrayList<AnnotationSearchResult> foundTimes) {
+    public void setFoundTimes(List<AnnotationSearchResult> foundTimes) {
         this.foundTimes = new ArrayList<>(foundTimes.stream().filter(e -> e.getCoveredText().length() > 2).sorted(Comparator.comparingInt(AnnotationSearchResult::getOccurrences).reversed()).toList());
     }
 
-    public ArrayList<AnnotationSearchResult> getFoundTaxons(int skip, int take) {
+    public List<AnnotationSearchResult> getFoundTaxons(int skip, int take) {
         return new ArrayList<>(foundTaxons.stream().skip(skip).limit(take).toList());
     }
 
-    public void setFoundTaxons(ArrayList<AnnotationSearchResult> foundTaxons) {
+    public void setFoundTaxons(List<AnnotationSearchResult> foundTaxons) {
         this.foundTaxons = new ArrayList<>(foundTaxons.stream().filter(e -> e.getCoveredText().length() > 2).sorted(Comparator.comparingInt(AnnotationSearchResult::getOccurrences).reversed()).toList());
     }
 
@@ -450,43 +450,43 @@ public class SearchState extends CacheItem {
         this.take = take;
     }
 
-    public ArrayList<AnnotationSearchResult> getFoundScopes(int skip, int take) {
+    public List<AnnotationSearchResult> getFoundScopes(int skip, int take) {
         return new ArrayList<>(foundScopes.stream().skip(skip).limit(take).toList());
     }
 
-    public void setFoundScopes(ArrayList<AnnotationSearchResult> foundScopes) {
+    public void setFoundScopes(List<AnnotationSearchResult> foundScopes) {
         this.foundScopes = foundScopes;
     }
 
-    public ArrayList<AnnotationSearchResult> getFoundCues(int skip, int take) {
+    public List<AnnotationSearchResult> getFoundCues(int skip, int take) {
         return new ArrayList<>(foundCues.stream().skip(skip).limit(take).toList());
     }
 
-    public void setFoundCues(ArrayList<AnnotationSearchResult> foundCues) {
+    public void setFoundCues(List<AnnotationSearchResult> foundCues) {
         this.foundCues = foundCues;
     }
 
-    public ArrayList<AnnotationSearchResult> getFoundXScopes(int skip, int take) {
+    public List<AnnotationSearchResult> getFoundXScopes(int skip, int take) {
         return new ArrayList<>(foundXScopes.stream().skip(skip).limit(take).toList());
     }
 
-    public void setFoundXScopes(ArrayList<AnnotationSearchResult> foundXScopes) {
+    public void setFoundXScopes(List<AnnotationSearchResult> foundXScopes) {
         this.foundXScopes = foundXScopes;
     }
 
-    public ArrayList<AnnotationSearchResult> getFoundFoci(int skip, int take) {
+    public List<AnnotationSearchResult> getFoundFoci(int skip, int take) {
         return new ArrayList<>(foundFoci.stream().skip(skip).limit(take).toList());
     }
 
-    public void setFoundFoci(ArrayList<AnnotationSearchResult> foundFoci) {
+    public void setFoundFoci(List<AnnotationSearchResult> foundFoci) {
         this.foundFoci = foundFoci;
     }
 
-    public ArrayList<AnnotationSearchResult> getFoundEvents(int skip, int take) {
+    public List<AnnotationSearchResult> getFoundEvents(int skip, int take) {
         return new ArrayList<>(foundEvents.stream().skip(skip).limit(take).toList());
     }
 
-    public void setFoundEvents(ArrayList<AnnotationSearchResult> foundEvents) {
+    public void setFoundEvents(List<AnnotationSearchResult> foundEvents) {
         this.foundEvents = foundEvents;
     }
 

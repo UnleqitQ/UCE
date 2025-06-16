@@ -23,6 +23,7 @@ import org.texttechnologylab.models.topic.TopicWord;
 import org.texttechnologylab.models.topic.UnifiedTopic;
 
 import java.util.HashMap;
+import java.util.Map;
 
 @Configuration
 @EnableTransactionManagement
@@ -87,7 +88,7 @@ public class HibernateConf {
         return metadata.getSessionFactoryBuilder().build();
     }
 
-    private static HashMap<Object, Object> getSettings() {
+    private static Map<Object, Object> getSettings() {
         var settings = new HashMap<>();
         var config = new CommonConfig();
         settings.put("connection.driver_class", config.getPostgresqlProperty("connection.driver_class"));

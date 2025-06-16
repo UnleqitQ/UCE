@@ -894,7 +894,7 @@ public class PostgresqlDataInterface_Impl implements DataInterface {
                 allAnnos.addAll(xscopes);
                 allAnnos.addAll(scopes);
 
-                HashMap<Long, ArrayList<PageSnippet>> foundSnippets = new HashMap<>();
+                HashMap<Long, List<PageSnippet>> foundSnippets = new HashMap<>();
                 TreeMap<Long, List<AnnotationSearchResult>> negSorted = new TreeMap<>();
                 for (AnnotationSearchResult anno : allAnnos) {
                     if (negSorted.get(anno.getAdditionalId()) == null) {
@@ -905,7 +905,7 @@ public class PostgresqlDataInterface_Impl implements DataInterface {
                     }
                 }
                 for (Long negId : negSorted.keySet()) {
-                    List<ArrayList<Integer>> offsetList = new ArrayList<>();
+                    List<List<Integer>> offsetList = new ArrayList<>();
                     int minBegin = 999999999;
                     int maxEnd = 0;
                     for (AnnotationSearchResult anno : negSorted.get(negId)) {
@@ -921,7 +921,7 @@ public class PostgresqlDataInterface_Impl implements DataInterface {
                         offsetList.add(offsetsTemp);
                     }
                     try {
-                        for (ArrayList<Integer> pair : offsetList) {
+                        for (List<Integer> pair : offsetList) {
                             for (int i = 0; i < pair.size(); i++) {
                                 pair.set(i, pair.get(i) - Math.max(minBegin - 100, 0));
                             }
@@ -1011,13 +1011,13 @@ public class PostgresqlDataInterface_Impl implements DataInterface {
                         // The found text snippets.
                         var gson = new Gson();
                         var resultSet = result.getArray("snippets_found").getResultSet();
-                        var foundSnippets = new HashMap<Integer, ArrayList<PageSnippet>>();
+                        var foundSnippets = new HashMap<Integer, List<PageSnippet>>();
                         // Snippets are the snippet text and the page_id to which this snippet belongs. They are json objects
                         while (resultSet.next()) {
                             var idx = resultSet.getInt(1) - 1;
-                            ArrayList<ArrayList<PageSnippet>> pageSnippet = gson.fromJson(
+                            ArrayList<List<PageSnippet>> pageSnippet = gson.fromJson(
                                     resultSet.getString(2),
-                                    new TypeToken<ArrayList<ArrayList<PageSnippet>>>() {
+                                    new TypeToken<List<List<PageSnippet>>>() {
                                     }.getType());
                             foundSnippets.put(idx, pageSnippet.getFirst());
                         }

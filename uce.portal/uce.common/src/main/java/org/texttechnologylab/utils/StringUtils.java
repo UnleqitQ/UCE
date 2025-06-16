@@ -396,12 +396,12 @@ public class StringUtils {
         return result.toString();
     }
 
-    public static String addBoldTags(String input, List<ArrayList<Integer>> offsets) {
+    public static String addBoldTags(String input, List<List<Integer>> offsets) {
         StringBuilder result = new StringBuilder();
         int idx = 0;
         for (char c : input.toCharArray()) {
             boolean inBold = false;
-            for (ArrayList<Integer> offset : offsets) {
+            for (List<Integer> offset : offsets) {
                 if (idx < offset.getLast() && offset.getFirst() <= idx) {
                     inBold = true;
                     break;

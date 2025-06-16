@@ -101,7 +101,7 @@ public class SearchCompleteNegation implements Search {
      *
      * @param argList
      */
-    private ArrayList<String> preprocess_args(ArrayList<String> argList) {
+    private List<String> preprocess_args(List<String> argList) {
         return new ArrayList<String>(argList.stream().map(a -> a
                         .trim()
                         .replace(".", "")
