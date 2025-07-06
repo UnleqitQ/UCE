@@ -4,7 +4,10 @@ import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
+import org.apache.commons.cli.CommandLine;
+import org.apache.commons.cli.DefaultParser;
 import org.apache.commons.cli.Options;
+import org.apache.commons.cli.ParseException;
 import org.apache.uima.cas.SerialFormat;
 import org.apache.uima.fit.factory.JCasFactory;
 import org.apache.uima.jcas.JCas;
@@ -38,21 +41,33 @@ public class DUUIPipelineWriter {
 
     private static final Logger log = LoggerFactory.getLogger(DUUIPipelineWriter.class);
 
-    public static void main(String[] args) {
-        File inputFolder = new File("C:\\Users\\quent\\Downloads\\Compressed\\UCE-Data\\input\\Reichstag\\1. Leg.-Periode\\1871,1");
-        File outputFolder = new File("C:\\Users\\quent\\Downloads\\Compressed\\UCE-Data\\input\\Reichstag\\1. Leg.-Periode\\out");
-        DUUIPipeline pipeline = new DUUIPipeline();
-        Map<String, String> urls = new HashMap<>();
-        urls.put("Spacy", "http://spacy.service.component.duui.texttechnologylab.org");
-        DUUIComposer composer;
-        try {
-            composer = pipeline.setListComposer(new HashMap<>(urls));
-        } catch (Exception e) {
-            log.error("Failed to initialize DUUIComposer", e);
+    public static void main(String[] args) throws ParseException {
+        // Parse command line arguments
+        Options options = getOptions();
+        DefaultParser parser = new DefaultParser();
+        CommandLine cmd = parser.parse(options, args);
+        if (cmd.hasOption("help")) {
+            System.out.println("Usage: java -jar DUUIPipelineWriter.jar [options]");
+            System.out.println("Options:");
+            System.out.println("  -inputFolder <path>   Path to the input folder containing XMI files");
+            System.out.println("  -outputFolder <path>  Path to the output folder where processed files will be saved");
+            System.out.println("  -configFile <path>    Path to the configuration file containing model URLs");
+            System.out.println("  -help                 Display this help message");
             return;
         }
+        // Validate and retrieve input and output folder paths
+        String inputFolderPath = cmd.getOptionValue("inputFolder");
+        String outputFolderPath = cmd.getOptionValue("outputFolder");
+        String configFilePath = cmd.getOptionValue("configFile");
+        if (inputFolderPath == null || outputFolderPath == null || configFilePath == null) {
+            System.err.println("Missing required options. Use -help for usage information.");
+            return;
+        }
+        File inputFolder = new File(inputFolderPath);
+        File outputFolder = new File(outputFolderPath);
+        File configFile = new File(configFilePath);
         if (!inputFolder.exists() || !inputFolder.isDirectory()) {
-            log.error("Input folder does not exist or is not a directory: {}", inputFolder.getAbsolutePath());
+            System.err.println("Input folder does not exist or is not a directory: " + inputFolder.getAbsolutePath());
             return;
         }
         if (!outputFolder.exists()) {
@@ -62,6 +77,25 @@ public class DUUIPipelineWriter {
             }
         } else if (!outputFolder.isDirectory()) {
             System.err.println("Output path exists but is not a directory: " + outputFolder.getAbsolutePath());
+            return;
+        }
+        if (!configFile.exists() || !configFile.isFile()) {
+            System.err.println("Configuration file does not exist or is not a file: " + configFile.getAbsolutePath());
+            return;
+        }
+        DUUIPipeline pipeline = new DUUIPipeline();
+        // Load URLs from the configuration file
+        Map<String, String> urls = loadUrlsFromConfig(configFile);
+        if (urls.isEmpty()) {
+            System.err.println("No valid URLs found in the configuration file: " + configFile.getAbsolutePath());
+            return;
+        }
+        // urls.put("Spacy", "http://spacy.service.component.duui.texttechnologylab.org");
+        DUUIComposer composer;
+        try {
+            composer = pipeline.setListComposer(new HashMap<>(urls));
+        } catch (Exception e) {
+            log.error("Failed to initialize DUUIComposer", e);
             return;
         }
         log.info("Starting DUUI pipeline with input folder: {} and output folder: {}", inputFolder.getAbsolutePath(), outputFolder.getAbsolutePath());
@@ -107,6 +141,7 @@ public class DUUIPipelineWriter {
         options.addOption("inputFolder", true, "Path to the input folder containing XMI files");
         options.addOption("outputFolder", true, "Path to the output folder where processed files will be saved");
         options.addOption("configFile", true, "Path to the configuration file containing model URLs");
+        options.addOption("help", false, "Display this help message");
         return options;
     }
 
