@@ -163,6 +163,11 @@ public class DUUIPipelineWriter {
                     JsonObject obj = element.getAsJsonObject();
                     String modelName = obj.get("name").getAsString();
                     String url = obj.get("url").getAsString();
+                    boolean ignore = obj.has("ignore") && obj.get("ignore").getAsBoolean();
+                    if (ignore) {
+                        log.info("Ignoring model: {}", modelName);
+                        continue;
+                    }
                     urls.put(modelName, url);
                 } else {
                     log.warn("Invalid JSON object in config file: {}", element);
