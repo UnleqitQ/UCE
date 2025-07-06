@@ -102,6 +102,11 @@ public class DUUIPipelineWriter {
         try (Stream<Path> paths = Files.walk(inputFolder.toPath())) {
             List<Path> inputFiles = paths.filter(Files::isRegularFile).filter(path -> path.toString().endsWith(".xmi")).toList();
             for (Path path : inputFiles) {
+                Path outputPath = outputFolder.toPath().resolve(inputFolder.toPath().relativize(path));
+                if (Files.exists(outputPath)) {
+                    log.info("Output file already exists, skipping: {}", outputPath.toAbsolutePath());
+                    continue;
+                }
                 log.info("Processing file: {}", path.toAbsolutePath());
                 JCas jCasIn = JCasFactory.createJCas();
                 log.info("Loading file into JCas: {}", path.toAbsolutePath());
