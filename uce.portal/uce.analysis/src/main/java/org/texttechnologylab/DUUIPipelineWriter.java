@@ -95,4 +95,32 @@ public class DUUIPipelineWriter {
         }
     }
 
+    /**
+     * Loads URLs from a configuration file.
+     *
+     * @param configFile the configuration file containing model URLs
+     * @return a map of model names to their corresponding URLs
+     */
+
+    @NotNull
+    private static Map<String, String> loadUrlsFromConfig(File configFile) {
+        Map<String, String> urls = new HashMap<>();
+        try {
+            JsonArray array = JsonParser.parseString(Files.readString(configFile.toPath())).getAsJsonArray();
+            for (JsonElement element : array) {
+                if (element.isJsonObject()) {
+                    JsonObject obj = element.getAsJsonObject();
+                    String modelName = obj.get("name").getAsString();
+                    String url = obj.get("url").getAsString();
+                    urls.put(modelName, url);
+                } else {
+                    log.warn("Invalid JSON object in config file: {}", element);
+                }
+            }
+        } catch (Exception e) {
+            log.error("Failed to load URLs from config file: {}", configFile.getAbsolutePath(), e);
+        }
+        return urls;
+    }
+
 }
