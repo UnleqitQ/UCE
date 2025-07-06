@@ -13,6 +13,7 @@ import org.apache.uima.fit.factory.JCasFactory;
 import org.apache.uima.jcas.JCas;
 import org.apache.uima.util.CasIOUtils;
 import org.apache.uima.util.CasLoadMode;
+import org.javatuples.Pair;
 import org.jetbrains.annotations.NotNull;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -21,8 +22,10 @@ import org.texttechnologylab.DockerUnifiedUIMAInterface.DUUIComposer;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
+import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -100,8 +103,18 @@ public class DUUIPipelineWriter {
         }
         log.info("Starting DUUI pipeline with input folder: {} and output folder: {}", inputFolder.getAbsolutePath(), outputFolder.getAbsolutePath());
         try (Stream<Path> paths = Files.walk(inputFolder.toPath())) {
-            List<Path> inputFiles = paths.filter(Files::isRegularFile).filter(path -> path.toString().endsWith(".xmi")).toList();
+            List<Path> inputFiles = paths.filter(Files::isRegularFile).filter(path -> path.toString().endsWith(".xmi")).map(path -> {
+                try {
+                    return Pair.with(path, Files.size(path));
+                } catch (IOException e) {
+                    return Pair.with(path, 0L);
+                }
+            }).sorted(Comparator.comparingLong(Pair::getValue1)).map(Pair::getValue0).toList();
             for (Path path : inputFiles) {
+                if (!Files.isReadable(path)) {
+                    log.warn("Skipping unreadable file: {}", path.toAbsolutePath());
+                    continue;
+                }
                 Path outputPath = outputFolder.toPath().resolve(inputFolder.toPath().relativize(path));
                 if (Files.exists(outputPath)) {
                     log.info("Output file already exists, skipping: {}", outputPath.toAbsolutePath());
