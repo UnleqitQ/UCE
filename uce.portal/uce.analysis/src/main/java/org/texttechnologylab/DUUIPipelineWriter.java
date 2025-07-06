@@ -117,9 +117,14 @@ public class DUUIPipelineWriter {
                     continue;
                 }
                 log.info("File loaded successfully, running DUUI pipeline...");
-                JCas jCasOut = pipeline.runPipeline(jCasIn, composer);
+                JCas jCasOut;
+                try {
+                    jCasOut = pipeline.runPipeline(jCasIn, composer);
+                } catch (Exception e) {
+                    log.error("Error running DUUI pipeline on file: {}", path.toAbsolutePath(), e);
+                    continue;
+                }
                 log.info("Pipeline execution completed for file: {}", path.toAbsolutePath());
-                Path outputPath = outputFolder.toPath().resolve(inputFolder.toPath().relativize(path));
                 Files.createDirectories(outputPath.getParent());
                 log.info("Saving processed file to: {}", outputPath.toAbsolutePath());
                 try (FileOutputStream fos = new FileOutputStream(outputPath.toFile())) {
