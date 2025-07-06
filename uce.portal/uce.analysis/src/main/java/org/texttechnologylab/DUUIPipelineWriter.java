@@ -4,6 +4,7 @@ import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
+import org.apache.commons.cli.Options;
 import org.apache.uima.cas.SerialFormat;
 import org.apache.uima.fit.factory.JCasFactory;
 import org.apache.uima.jcas.JCas;
@@ -94,6 +95,21 @@ public class DUUIPipelineWriter {
             log.error("An error occurred during the DUUI pipeline execution", e);
         }
     }
+
+    /**
+     * Returns the command line options for the DUUIPipelineWriter.
+     *
+     * @return Options object containing command line options
+     */
+    @NotNull
+    private static Options getOptions() {
+        Options options = new Options();
+        options.addOption("inputFolder", true, "Path to the input folder containing XMI files");
+        options.addOption("outputFolder", true, "Path to the output folder where processed files will be saved");
+        options.addOption("configFile", true, "Path to the configuration file containing model URLs");
+        return options;
+    }
+
 
     /**
      * Loads URLs from a configuration file.
