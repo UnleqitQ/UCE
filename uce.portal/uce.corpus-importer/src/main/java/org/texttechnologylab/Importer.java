@@ -566,6 +566,11 @@ public class Importer {
                         () -> setUnifiedTopic(document, jCas),
                         (ex) -> logImportWarn("This file should have contained UnifiedTopic annotations, but selecting them caused an error.", ex, filePath));
 
+            if (corpusConfig.getAnnotations().isHate())
+                ExceptionUtils.tryCatchLog(
+                        () -> setHate(document, jCas),
+                        (ex) -> logImportWarn("This file should have contained Hate annotations, but selecting them caused an error.", ex, filePath));
+
             // Keep this at the end of the annotation setting, as they might require previous annotations. Order matter here!
             if (corpusConfig.getAnnotations().isLogicalLinks())
                 ExceptionUtils.tryCatchLog(
@@ -1408,6 +1413,12 @@ public class Importer {
         });
 
         document.setUnifiedTopics(unifiedTopics);
+    }
+
+    /**
+     * Selects and sets the hate to a document
+     */
+    private void setHate(Document document, JCas jCas) {
     }
 
     /**
