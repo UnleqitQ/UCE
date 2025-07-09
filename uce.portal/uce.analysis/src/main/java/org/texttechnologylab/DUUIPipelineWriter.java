@@ -98,6 +98,9 @@ public class DUUIPipelineWriter {
         DUUIComposer composer;
         try {
             composer = pipeline.setListComposer(new HashMap<>(urls));
+            /*
+             * Use "docker run --rm -p 8000:9714 -d docker.texttechnologylab.org/duui-tts-converter:latest" to run the TTS converter service.
+             */
             if (config.useTTSConverter()) {
                 log.info("Using TTS Converter URL: {}", config.ttsConverterUrl());
                 composer.add(new DUUIRemoteDriver.Component(config.ttsConverterUrl()).withParameter("remove_old", "false").withParameter("selection", "org.texttechnologylab.annotation.Topic").build());
