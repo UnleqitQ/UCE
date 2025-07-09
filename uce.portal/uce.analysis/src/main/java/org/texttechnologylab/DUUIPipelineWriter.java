@@ -18,6 +18,7 @@ import org.jetbrains.annotations.NotNull;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.texttechnologylab.DockerUnifiedUIMAInterface.DUUIComposer;
+import org.texttechnologylab.DockerUnifiedUIMAInterface.driver.DUUIRemoteDriver;
 
 import java.io.File;
 import java.io.FileInputStream;
@@ -87,8 +88,8 @@ public class DUUIPipelineWriter {
             return;
         }
         DUUIPipeline pipeline = new DUUIPipeline();
-        // Load URLs from the configuration file
-        Map<String, String> urls = loadUrlsFromConfig(configFile);
+        PipelineConfiguration config = loadConfigFromFile(configFile);
+        Map<String, String> urls = config.urls();
         if (urls.isEmpty()) {
             System.err.println("No valid URLs found in the configuration file: " + configFile.getAbsolutePath());
             return;
@@ -97,6 +98,10 @@ public class DUUIPipelineWriter {
         DUUIComposer composer;
         try {
             composer = pipeline.setListComposer(new HashMap<>(urls));
+            if (config.useTTSConverter()) {
+                log.info("Using TTS Converter URL: {}", config.ttsConverterUrl());
+                composer.add(new DUUIRemoteDriver.Component(config.ttsConverterUrl()).withParameter("remove_old", "false").withParameter("selection", "org.texttechnologylab.annotation.Topic").build());
+            }
         } catch (Exception e) {
             log.error("Failed to initialize DUUIComposer", e);
             return;
@@ -168,19 +173,14 @@ public class DUUIPipelineWriter {
         return options;
     }
 
-
-    /**
-     * Loads URLs from a configuration file.
-     *
-     * @param configFile the configuration file containing model URLs
-     * @return a map of model names to their corresponding URLs
-     */
-
     @NotNull
-    private static Map<String, String> loadUrlsFromConfig(File configFile) {
+    private static PipelineConfiguration loadConfigFromFile(File configFile) {
         Map<String, String> urls = new HashMap<>();
+        String ttsConverterUrl = null;
+        boolean useTTSConverter = false;
         try {
-            JsonArray array = JsonParser.parseString(Files.readString(configFile.toPath())).getAsJsonArray();
+            JsonObject jo = JsonParser.parseString(Files.readString(configFile.toPath())).getAsJsonObject();
+            JsonArray array = jo.getAsJsonArray("urls");
             for (JsonElement element : array) {
                 if (element.isJsonObject()) {
                     JsonObject obj = element.getAsJsonObject();
@@ -196,10 +196,16 @@ public class DUUIPipelineWriter {
                     log.warn("Invalid JSON object in config file: {}", element);
                 }
             }
+            if (jo.has("useTTSConverter") && jo.get("useTTSConverter").getAsBoolean()) {
+                useTTSConverter = true;
+                ttsConverterUrl = jo.get("ttsConverterUrl").getAsString();
+            }
         } catch (Exception e) {
             log.error("Failed to load URLs from config file: {}", configFile.getAbsolutePath(), e);
         }
-        return urls;
+        return new PipelineConfiguration(urls, ttsConverterUrl, useTTSConverter);
     }
 
+    private record PipelineConfiguration(Map<String, String> urls, String ttsConverterUrl, boolean useTTSConverter) {
+    }
 }
