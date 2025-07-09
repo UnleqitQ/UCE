@@ -20,6 +20,7 @@ import org.texttechnologylab.models.corpus.links.AnnotationToDocumentLink;
 import org.texttechnologylab.models.corpus.links.DocumentLink;
 import org.texttechnologylab.models.corpus.links.DocumentToAnnotationLink;
 import org.texttechnologylab.models.corpus.links.Link;
+import org.texttechnologylab.models.hate.Hate;
 import org.texttechnologylab.models.negation.*;
 import org.texttechnologylab.models.search.AnnotationSearchResult;
 import org.texttechnologylab.models.search.PageSnippet;
@@ -217,6 +218,12 @@ public class Document extends ModelBase implements WikiModel, Linkable {
     @OneToMany(mappedBy = "document", cascade = CascadeType.ALL, fetch = FetchType.EAGER)
     @Fetch(value = FetchMode.SUBSELECT)
     private List<UnifiedTopic> unifiedTopics;
+
+    @Setter
+    @Getter
+    @OneToMany(mappedBy = "document", cascade = CascadeType.ALL, fetch = FetchType.EAGER)
+    @Fetch(value = FetchMode.SUBSELECT)
+    private List<Hate> hates;
 
     public Document() {
         metadataTitleInfo = new MetadataTitleInfo();
