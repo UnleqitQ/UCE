@@ -24,6 +24,8 @@ public class CorpusAnnotationConfig {
     private boolean scope;
     private boolean xscope;
     private boolean unifiedTopic;
+    private boolean hate;
+
 
     public boolean isGeoNames() {
         return geoNames;
@@ -203,4 +205,7 @@ public class CorpusAnnotationConfig {
         return unifiedTopic;
     }
 
+    public boolean isHate() {
+        return hate;
+    }
 }
