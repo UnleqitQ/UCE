@@ -1430,6 +1430,8 @@ public class Importer {
             hate.setNonHate(h.getNonHate());
             hates.add(hate);
         });
+
+        document.setHates(hates);
     }
 
     /**
