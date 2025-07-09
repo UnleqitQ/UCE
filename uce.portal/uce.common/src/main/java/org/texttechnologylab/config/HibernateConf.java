@@ -14,6 +14,7 @@ import org.texttechnologylab.models.corpus.links.AnnotationToDocumentLink;
 import org.texttechnologylab.models.corpus.links.DocumentLink;
 import org.texttechnologylab.models.corpus.links.DocumentToAnnotationLink;
 import org.texttechnologylab.models.gbif.GbifOccurrence;
+import org.texttechnologylab.models.hate.Hate;
 import org.texttechnologylab.models.imp.ImportLog;
 import org.texttechnologylab.models.imp.UCEImport;
 import org.texttechnologylab.models.negation.*;
@@ -80,6 +81,8 @@ public class HibernateConf {
         metadataSources.addAnnotatedClass(TopicWord.class);
         metadataSources.addAnnotatedClass(TopicValueBase.class);
         metadataSources.addAnnotatedClass(TopicValueBaseWithScore.class);
+        // hate
+        metadataSources.addAnnotatedClass(Hate.class);
 
         metadataSources.addAnnotatedClass(DocumentTopThreeTopics.class);
         var metadata = metadataSources.buildMetadata();
