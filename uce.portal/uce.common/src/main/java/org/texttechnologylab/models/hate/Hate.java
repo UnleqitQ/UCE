@@ -1,5 +1,6 @@
 package org.texttechnologylab.models.hate;
 
+import org.texttechnologylab.annotations.Typesystem;
 import org.texttechnologylab.models.UIMAAnnotation;
 import org.texttechnologylab.models.WikiModel;
 import org.texttechnologylab.models.corpus.Document;
@@ -8,6 +9,7 @@ import javax.persistence.*;
 
 @Entity
 @Table(name = "hate")
+@Typesystem(types = {org.texttechnologylab.annotation.Hate.class})
 public class Hate extends UIMAAnnotation implements WikiModel {
     @Column(name = "hate", nullable = false)
     private double hate;
