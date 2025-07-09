@@ -39,6 +39,7 @@ import org.texttechnologylab.models.corpus.links.DocumentToAnnotationLink;
 import org.texttechnologylab.models.corpus.ocr.OCRPageAdapterImpl;
 import org.texttechnologylab.models.corpus.ocr.PageAdapter;
 import org.texttechnologylab.models.corpus.ocr.PageAdapterImpl;
+import org.texttechnologylab.models.hate.Hate;
 import org.texttechnologylab.models.imp.ImportLog;
 import org.texttechnologylab.models.imp.ImportStatus;
 import org.texttechnologylab.models.imp.LogStatus;
@@ -1419,6 +1420,16 @@ public class Importer {
      * Selects and sets the hate to a document
      */
     private void setHate(Document document, JCas jCas) {
+        List<Hate> hates = new ArrayList<>();
+
+        JCasUtil.select(jCas, org.texttechnologylab.annotation.Hate.class).forEach(h -> {
+            Hate hate = new Hate(h.getBegin(), h.getEnd());
+            hate.setDocument(document);
+            hate.setCoveredText(h.getCoveredText());
+            hate.setHate(h.getHate());
+            hate.setNonHate(h.getNonHate());
+            hates.add(hate);
+        });
     }
 
     /**
