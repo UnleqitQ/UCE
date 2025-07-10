@@ -60,7 +60,7 @@ public class Hate extends UIMAAnnotation implements WikiModel {
 
     @Override
     public String getWikiId() {
-        return "UT" + "-" + this.getId();
+        return "H" + "-" + this.getId();
     }
 
 }
