@@ -27,6 +27,7 @@ import org.texttechnologylab.models.dto.map.MapClusterDto;
 import org.texttechnologylab.models.dto.map.PointDto;
 import org.texttechnologylab.models.gbif.GbifOccurrence;
 import org.texttechnologylab.models.globe.GlobeTaxon;
+import org.texttechnologylab.models.hate.HateType;
 import org.texttechnologylab.models.imp.ImportLog;
 import org.texttechnologylab.models.imp.UCEImport;
 import org.texttechnologylab.models.negation.CompleteNegation;
@@ -1353,6 +1354,25 @@ public class PostgresqlDataInterface_Impl implements DataInterface {
                 Hibernate.initialize(t.getWords());
             }
             return topic;
+        });
+    }
+
+    public synchronized HateType getOrCreateHateType(String type) throws DatabaseOperationException {
+        return executeOperationSafely((session) -> {
+            var criteriaBuilder = session.getCriteriaBuilder();
+            var criteriaQuery = criteriaBuilder.createQuery(HateType.class);
+            var root = criteriaQuery.from(HateType.class);
+
+            criteriaQuery.select(root).where(criteriaBuilder.equal(root.get("type"), type));
+
+            HateType hateType;
+            try {
+                hateType = session.createQuery(criteriaQuery).getSingleResult();
+            } catch (NoResultException e) {
+                hateType = new HateType(type);
+                session.save(hateType);
+            }
+            return hateType;
         });
     }
 
