@@ -40,6 +40,8 @@ import org.texttechnologylab.models.corpus.ocr.OCRPageAdapterImpl;
 import org.texttechnologylab.models.corpus.ocr.PageAdapter;
 import org.texttechnologylab.models.corpus.ocr.PageAdapterImpl;
 import org.texttechnologylab.models.hate.Hate;
+import org.texttechnologylab.models.hate.HateType;
+import org.texttechnologylab.models.hate.HateValue;
 import org.texttechnologylab.models.imp.ImportLog;
 import org.texttechnologylab.models.imp.ImportStatus;
 import org.texttechnologylab.models.imp.LogStatus;
@@ -1426,8 +1428,35 @@ public class Importer {
             Hate hate = new Hate(h.getBegin(), h.getEnd());
             hate.setDocument(document);
             hate.setCoveredText(h.getCoveredText());
-            hate.setHate(h.getHate());
-            hate.setNonHate(h.getNonHate());
+
+            List<HateValue> hateValues = new ArrayList<>();
+
+            HateType hateType;
+            HateType nonHateType;
+            try {
+                hateType = db.getOrCreateHateType("hate");
+                nonHateType = db.getOrCreateHateType("non-hate");
+            } catch (DatabaseOperationException e) {
+                logger.error("Error while getting or creating hate types.", e);
+                return; // Skip this hate if we can't get the types
+            }
+
+            double hateScore = h.getHate();
+            double nonHateScore = h.getNonHate();
+
+            HateValue hateValue = new HateValue();
+            hateValue.setHateType(hateType);
+            hateValue.setValue(hateScore);
+            hateValue.setHate(hate);
+            hateValues.add(hateValue);
+
+            HateValue nonHateValue = new HateValue();
+            nonHateValue.setHateType(nonHateType);
+            nonHateValue.setValue(nonHateScore);
+            nonHateValue.setHate(hate);
+            hateValues.add(nonHateValue);
+
+            hate.setHateValues(hateValues);
             hates.add(hate);
         });
 
