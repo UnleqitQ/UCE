@@ -2708,6 +2708,41 @@ public final class PostgresqlDataInterface_Impl implements DataInterface {
         return doc;
     }
 
+    public void executeNativeUpdate(String sql) throws DatabaseOperationException, DocumentAccessDeniedException {
+        executeOperationSafely((session) -> {
+            session.createNativeQuery(sql).executeUpdate();
+            return null;
+        });
+    }
+
+    public void executeNativeStatement(String sql) throws DatabaseOperationException, DocumentAccessDeniedException {
+        executeOperationSafely((session) -> {
+            session.doWork(connection -> {
+                try (var statement = connection.createStatement()) {
+                    statement.execute(sql);
+                }
+            });
+            return null;
+        });
+    }
+
+    public void executeNativeStatements(List<String> sqlStatements) throws DatabaseOperationException, DocumentAccessDeniedException {
+        executeOperationSafely((session) -> {
+            session.doWork(connection -> {
+                try (var statement = connection.createStatement()) {
+                    for (String sql : sqlStatements) {
+                        statement.execute(sql);
+                    }
+                }
+            });
+            return null;
+        });
+    }
+
+    public List<?> executeNativeQuery(String sql) throws DatabaseOperationException, DocumentAccessDeniedException {
+        return executeOperationSafely((session) -> session.createNativeQuery(sql).getResultList());
+    }
+
     @FunctionalInterface
     private interface SessionOperation<T> {
         T apply(Session session) throws DocumentAccessDeniedException;

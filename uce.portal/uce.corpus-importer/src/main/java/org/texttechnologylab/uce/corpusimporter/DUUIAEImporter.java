@@ -6,12 +6,28 @@ import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.apache.uima.UimaContext;
 import org.apache.uima.analysis_engine.AnalysisEngineProcessException;
+import org.apache.uima.cas.Feature;
+import org.apache.uima.cas.FeatureStructure;
 import org.apache.uima.fit.component.JCasAnnotator_ImplBase;
 import org.apache.uima.fit.descriptor.ConfigurationParameter;
 import org.apache.uima.fit.util.JCasUtil;
 import org.apache.uima.jcas.JCas;
 import org.apache.uima.resource.ResourceInitializationException;
 import org.springframework.context.annotation.AnnotationConfigApplicationContext;
+import org.texttechnologylab.duui.artifact.DUUIArtifact;
+import org.texttechnologylab.duui.artifact.DUUIArtifactType;
+import org.texttechnologylab.duui.orchestration.DUUIDispatchMode;
+import org.texttechnologylab.duui.orchestration.DUUIDispatchPolicy;
+import org.texttechnologylab.duui.orchestration.DUUIExecutionContext;
+import org.texttechnologylab.duui.orchestration.DUUIOrchestrator;
+import org.texttechnologylab.duui.pipeline.DUUICheckpoint;
+import org.texttechnologylab.duui.pipeline.DUUIComponent;
+import org.texttechnologylab.duui.pipeline.DUUIComponents;
+import org.texttechnologylab.duui.pipeline.DUUIAdapter;
+import org.texttechnologylab.duui.pipeline.DUUIExecutor;
+import org.texttechnologylab.duui.pipeline.DUUIPipeline;
+import org.texttechnologylab.duui.pipeline.DUUIStage;
+import org.texttechnologylab.duui.pipeline.DUUIStageType;
 import org.texttechnologylab.uce.common.config.CommonConfig;
 import org.texttechnologylab.uce.common.config.CorpusConfig;
 import org.texttechnologylab.uce.common.config.SpringConfig;
@@ -21,32 +37,38 @@ import org.texttechnologylab.uce.common.models.corpus.Document;
 import org.texttechnologylab.uce.common.models.imp.ImportLog;
 import org.texttechnologylab.uce.common.models.imp.ImportStatus;
 import org.texttechnologylab.uce.common.models.imp.LogStatus;
-import org.texttechnologylab.uce.common.models.imp.UCEImport;
 import org.texttechnologylab.uce.common.security.DocumentAccessManager;
+import org.texttechnologylab.uce.common.services.AgeGraphService;
 import org.texttechnologylab.uce.common.services.EmbeddingService;
 import org.texttechnologylab.uce.common.services.LexiconService;
 import org.texttechnologylab.uce.common.services.PostgresqlDataInterface_Impl;
 import org.texttechnologylab.uce.common.utils.StringUtils;
 import org.texttechnologylab.uce.common.utils.SystemStatus;
+import org.texttechnologylab.uce.corpusimporter.pipeline.artifact.UCECorpus;
+import org.texttechnologylab.uce.corpusimporter.pipeline.artifact.UCEDocument;
+import org.texttechnologylab.uce.corpusimporter.pipeline.artifact.UCEImport;
+import org.texttechnologylab.annotation.domain.Association;
+import org.texttechnologylab.annotation.domain.Domain;
+import org.texttechnologylab.annotation.domain.Equivalence;
+import org.texttechnologylab.annotation.domain.Membership;
+import org.texttechnologylab.annotation.domain.Reference;
+import org.texttechnologylab.annotation.domain.Sequence;
 
 import java.io.InputStream;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.IdentityHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
-import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.CompletionException;
 import java.util.concurrent.CopyOnWriteArrayList;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-import java.util.concurrent.Semaphore;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 
@@ -56,6 +78,9 @@ public class DUUIAEImporter extends JCasAnnotator_ImplBase {
     private static final int BATCH_SIZE = 2000;
     private static final Path EXTERNAL_CORPUS_CONFIG_PATH = Path.of("/app/config/UCECorpusConfigEmpty.json");
     private static final Path LEGACY_CORPUS_CONFIG_PATH = Path.of("uce.corpus-importer/src/main/resources/UCECorpusConfigEmpty.json");
+    private static final DUUIArtifactType<UCEImport> UCE_IMPORT_ARTIFACT = DUUIArtifactType.of("uce/import");
+    private static final DUUIArtifactType<UCECorpus> UCE_CORPUS_ARTIFACT = DUUIArtifactType.of("uce/corpus");
+    private static final DUUIArtifactType<UCEDocument> UCE_DOCUMENT_ARTIFACT = DUUIArtifactType.of("uce/document");
 
     public static final String PARAM_IMPORTER_NUMBER = "importerNumber";
     @ConfigurationParameter(name = PARAM_IMPORTER_NUMBER, mandatory = false, defaultValue = "1")
@@ -89,6 +114,10 @@ public class DUUIAEImporter extends JCasAnnotator_ImplBase {
     @ConfigurationParameter(name = PARAM_STAGE_PARALLELISM, mandatory = false)
     private String[] stageParallelism;
 
+    public static final String PARAM_ENABLE_DOMAIN_GRAPH_IMPORT = "enableDomainGraphImport";
+    @ConfigurationParameter(name = PARAM_ENABLE_DOMAIN_GRAPH_IMPORT, mandatory = false, defaultValue = "false")
+    private boolean enableDomainGraphImport;
+
     private AnnotationConfigApplicationContext springContext;
 
     @Override
@@ -109,19 +138,18 @@ public class DUUIAEImporter extends JCasAnnotator_ImplBase {
         ctx.corpusConfigJson = corpusConfigJson;
         ctx.stageDispatchModes = stageDispatchModes;
         ctx.stageParallelism = stageParallelism;
+        ctx.enableDomainGraphImport = enableDomainGraphImport;
         ctx.originalCas = jCas;
         ctx.workingCas = jCas;
         ctx.springContext = springContext;
         ctx.filePath = "DUUI-CAS-Import-" + System.currentTimeMillis() + ".xmi";
 
         try {
-            ImportExecutionContextHolder.set(ctx);
-            executeStageGraph(jCas, ctx.numThreads);
+            executeStageGraph(jCas, ctx);
         } catch (Exception e) {
             throw new AnalysisEngineProcessException(e);
         } finally {
             closeGuardQuietly(ctx);
-            ImportExecutionContextHolder.clear();
         }
     }
 
@@ -143,64 +171,166 @@ public class DUUIAEImporter extends JCasAnnotator_ImplBase {
         }
     }
 
-    private static void executeStageGraph(JCas jCas, int parallelism) throws Exception {
-        DispatchRuntime dispatchRuntime = DispatchRuntime.fromContext(ImportExecutionContextHolder.get(), parallelism);
-        try (dispatchRuntime) {
-            buildPipeline().execute(jCas, dispatchRuntime);
+    private static void executeStageGraph(JCas jCas, ImportExecutionContext ctx) throws Exception {
+        DUUIExecutionContext executionContext = new DUUIExecutionContext();
+        executionContext.put(ImportExecutionContext.class, ctx);
+        try (DUUIExecutor executor = new DUUIExecutor(ctx.importId)) {
+            DUUIOrchestrator orchestrator = new DUUIOrchestrator(
+                    ctx.importId,
+                    buildPipeline(ctx),
+                    null,
+                    null,
+                    executor,
+                    null
+            );
+            DUUIArtifact<UCEImport> root = DUUIArtifact.of(new UCEImport(
+                    ctx.importId,
+                    ctx.sourcePath == null || ctx.sourcePath.isBlank() ? List.of(Path.of(".")) : List.of(Path.of(ctx.sourcePath)),
+                    ctx.importerNumber,
+                    ctx.numThreads,
+                    ctx.casView
+            ), UCE_IMPORT_ARTIFACT);
+            orchestrator.run(List.of(root), executionContext);
         }
     }
 
-    private static Pipeline buildPipeline() {
-        return new Pipeline(List.of(
-                new ImportInitAE(),
-                new CorpusConfigLoadAE(),
-                new CorpusEnsureAE(),
-                new UceMetadataFilterLoadAE(),
-                new CasViewSelectAE(),
-                new DocumentCreateAE(),
-                new DocumentDuplicateCheckAE(),
-                new MimePayloadAE(),
-                new MetadataTitleInfoAE(),
-                new S3ArchiveAE(),
-                MultiStage.of(DispatchPolicy.cpu(), List.of(
-                        new UceMetadataExtractAE(),
-                        new SentenceExtractAE(),
-                        new NamedEntityExtractAE(),
-                        new SentimentExtractAE(),
-                        new EmotionExtractAE(),
-                        new LemmaExtractAE(),
-                        new SemanticRoleExtractAE(),
-                        new TimeExtractAE(),
-                        new WikiLinkExtractAE(),
-                        new NegationExtractAE(),
-                        new UnifiedTopicExtractAE(),
-                        new PermissionExtractAE()
-                )),
-                new GeoNamesExtractAE(),
-                new TaxonomyExtractAE(),
-                new PageExtractAE(),
-                MultiStage.of(DispatchPolicy.mixed(), List.of(
-                        new ImageExtractAE(),
-                        new LogicalLinksExtractAE()
-                )),
-                new DocumentPersistAE(),
-                new DocumentPostProcessAE(),
-                new BatchPostProcessAE(),
-                new CorpusFinalizeAE(),
-                new ImportLogAE()
-        ));
+    private static ImportExecutionContext currentImportContext() {
+        return org.texttechnologylab.duui.orchestration.DUUIWorker.current().requireCurrentTask().context().require(ImportExecutionContext.class);
+    }
+
+    private static DUUIPipeline buildPipeline(ImportExecutionContext ctx) {
+        return DUUIPipeline.builder("uce-importer-" + ctx.importId)
+                .checkpoint(DUUICheckpoint.builder("uce-import", UCE_IMPORT_ARTIFACT)
+                        .stage(stage("ImportInitAE", new ImportInitAE()))
+                        .stage(stage("CorpusConfigLoadAE", new CorpusConfigLoadAE()))
+                        .stage(stage("CorpusEnsureAE", new CorpusEnsureAE()))
+                        .stage(stage("UceMetadataFilterLoadAE", new UceMetadataFilterLoadAE()))
+                        .stage(DUUIStage.of("EmitCorpusArtifact", emitCorpus()))
+                        .build())
+                .checkpoint(DUUICheckpoint.builder("uce-corpus", UCE_CORPUS_ARTIFACT)
+                        .stage(DUUIStage.of("EmitDocumentArtifact", emitDocument()))
+                        .build())
+                .checkpoint(DUUICheckpoint.builder("uce-document", UCE_DOCUMENT_ARTIFACT)
+                        .stage(stage("CasViewSelectAE", new CasViewSelectAE()))
+                        .stage(stage("DomainGraphExtractAE", new DomainGraphExtractAE()))
+                        .stage(stage("DocumentCreateAE", new DocumentCreateAE()))
+                        .stage(stage("DocumentDuplicateCheckAE", new DocumentDuplicateCheckAE()))
+                        .stage(stage("MimePayloadAE", new MimePayloadAE()))
+                        .stage(stage("MetadataTitleInfoAE", new MetadataTitleInfoAE()))
+                        .stage(stage("S3ArchiveAE", new S3ArchiveAE()))
+                        .stage(groupedStage("CoreDocumentExtraction", DispatchPolicy.cpu(), List.of(
+                                new UceMetadataExtractAE(),
+                                new SentenceExtractAE(),
+                                new NamedEntityExtractAE(),
+                                new SentimentExtractAE(),
+                                new EmotionExtractAE(),
+                                new LemmaExtractAE(),
+                                new SemanticRoleExtractAE(),
+                                new TimeExtractAE(),
+                                new WikiLinkExtractAE(),
+                                new NegationExtractAE(),
+                                new UnifiedTopicExtractAE(),
+                                new PermissionExtractAE()
+                        )))
+                        .stage(stage("GeoNamesExtractAE", new GeoNamesExtractAE()))
+                        .stage(stage("TaxonomyExtractAE", new TaxonomyExtractAE()))
+                        .stage(stage("PageExtractAE", new PageExtractAE()))
+                        .stage(groupedStage("SecondaryDocumentExtraction", DispatchPolicy.mixed(), List.of(
+                                new ImageExtractAE(),
+                                new LogicalLinksExtractAE()
+                        )))
+                        .stage(stage("DocumentPersistAE", new DocumentPersistAE()))
+                        .stage(stage("DomainGraphPersistAE", new DomainGraphPersistAE()))
+                        .stage(stage("DocumentPostProcessAE", new DocumentPostProcessAE()))
+                        .stage(stage("BatchPostProcessAE", new BatchPostProcessAE()))
+                        .stage(stage("CorpusFinalizeAE", new CorpusFinalizeAE()))
+                        .stage(stage("ImportLogAE", new ImportLogAE()))
+                        .build())
+                .build();
+    }
+
+    private static <T> DUUIStage<T> stage(String id, StageAE stage) {
+        return new DUUIStage<>(id, id, stageComponent(stage), id, null);
+    }
+
+    private static DUUIStage<UCEDocument> groupedStage(String id, DispatchPolicy policy, List<StageAE> stages) {
+        List<DUUIComponent<UCEDocument>> components = stages.stream()
+                .map(DUUIAEImporter::<UCEDocument>stageComponent)
+                .toList();
+        return new DUUIStage<>(
+                id,
+                id,
+                DUUIStageType.LINEAR,
+                components,
+                id,
+                toDUUIDispatchPolicy(policy),
+                null
+        );
+    }
+
+    private static <T> DUUIComponent<T> stageComponent(StageAE stage) {
+        return artifact -> {
+            stage.process(currentImportContext().originalCas);
+            return artifact;
+        };
+    }
+
+    private static DUUIComponent<UCEImport> emitCorpus() {
+        return DUUIComponents.adapter(new DUUIAdapter<UCEImport, UCECorpus>() {
+            @Override
+            public DUUIArtifactType<UCEImport> inputType() { return UCE_IMPORT_ARTIFACT; }
+
+            @Override
+            public DUUIArtifactType<UCECorpus> outputType() { return UCE_CORPUS_ARTIFACT; }
+
+            @Override
+            public DUUIArtifact<UCECorpus> adapt(DUUIArtifact<UCEImport> artifact) {
+                ImportExecutionContext ctx = currentImportContext();
+                UCEImport payload = artifact.payload();
+                Path root = payload.importRoots().isEmpty() ? Path.of(".") : payload.importRoots().get(0);
+                UCECorpus corpus = new UCECorpus(ctx.importId, root);
+                corpus.corpusConfig(ctx.corpusConfig);
+                corpus.corpus(ctx.corpus);
+                return artifact.childArtifact(corpus, UCE_CORPUS_ARTIFACT);
+            }
+        });
+    }
+
+    private static DUUIComponent<UCECorpus> emitDocument() {
+        return DUUIComponents.adapter(new DUUIAdapter<UCECorpus, UCEDocument>() {
+            @Override
+            public DUUIArtifactType<UCECorpus> inputType() { return UCE_CORPUS_ARTIFACT; }
+
+            @Override
+            public DUUIArtifactType<UCEDocument> outputType() { return UCE_DOCUMENT_ARTIFACT; }
+
+            @Override
+            public DUUIArtifact<UCEDocument> adapt(DUUIArtifact<UCECorpus> artifact) {
+                ImportExecutionContext ctx = currentImportContext();
+                UCEDocument document = new UCEDocument(ctx.importId, ctx.corpus.getId(), Path.of(ctx.filePath));
+                document.originalCas(ctx.originalCas);
+                document.selectedCas(ctx.workingCas);
+                return artifact.childArtifact(document, UCE_DOCUMENT_ARTIFACT);
+            }
+        });
+    }
+
+    private static DUUIDispatchPolicy toDUUIDispatchPolicy(DispatchPolicy policy) {
+        if (policy == null || policy.caller) {
+            return DUUIDispatchPolicy.CALLER;
+        }
+        DUUIDispatchMode mode = switch (policy.mode == null ? DispatchMode.MIXED : policy.mode) {
+            case IO -> DUUIDispatchMode.IO;
+            case CPU -> DUUIDispatchMode.CPU;
+            case MIXED -> DUUIDispatchMode.MIXED;
+        };
+        return DUUIDispatchPolicy.of(mode, policy.parallelism);
     }
 
     enum DispatchMode {
         IO,
         CPU,
         MIXED
-    }
-
-    private enum ExecutorKind {
-        PLATFORM,
-        VIRTUAL,
-        CALLER
     }
 
     static final class DispatchPolicy {
@@ -250,326 +380,6 @@ public class DUUIAEImporter extends JCasAnnotator_ImplBase {
         }
     }
 
-    private static final class Pipeline {
-        private final List<?> nodes;
-
-        private Pipeline(List<?> nodes) {
-            this.nodes = nodes;
-        }
-
-        void execute(JCas jCas, DispatchRuntime dispatchRuntime) throws AnalysisEngineProcessException {
-            for (Object node : nodes) {
-                if (node instanceof StageAE) {
-                    dispatchRuntime.executeStage((StageAE) node, DispatchPolicy.inherit(), jCas);
-                } else if (node instanceof MultiStage) {
-                    ((MultiStage) node).execute(jCas, dispatchRuntime);
-                }
-            }
-        }
-    }
-
-    private static final class MultiStage {
-        private final DispatchPolicy policy;
-        private final List<StageAE> stages;
-
-        private MultiStage(DispatchPolicy policy, List<StageAE> stages) {
-            this.policy = policy;
-            this.stages = stages;
-        }
-
-        static MultiStage of(List<StageAE> stages) {
-            return new MultiStage(DispatchPolicy.inherit(), stages);
-        }
-
-        static MultiStage of(DispatchPolicy policy, List<StageAE> stages) {
-            return new MultiStage(policy, stages);
-        }
-
-        public void execute(JCas jCas, DispatchRuntime dispatchRuntime) throws AnalysisEngineProcessException {
-            List<CompletableFuture<Void>> futures = new ArrayList<>();
-            for (StageAE stage : stages) {
-                futures.add(dispatchRuntime.submitStage(stage, policy, jCas));
-            }
-            try {
-                CompletableFuture.allOf(futures.toArray(new CompletableFuture[0])).join();
-            } catch (CompletionException e) {
-                Throwable cause = e.getCause();
-                if (cause instanceof AnalysisEngineProcessException) {
-                    throw (AnalysisEngineProcessException) cause;
-                }
-                throw new AnalysisEngineProcessException(cause == null ? e : cause);
-            }
-        }
-    }
-
-    private static final class DispatchRuntime implements AutoCloseable {
-        private final DispatchPolicy rootPolicy;
-        private final Map<String, DispatchPolicy> stageOverrides;
-        private final Map<ExecutorKey, DispatchExecutor> executors = new HashMap<>();
-
-        private DispatchRuntime(
-                DispatchPolicy rootPolicy,
-                Map<String, DispatchPolicy> stageOverrides
-        ) {
-            this.rootPolicy = rootPolicy;
-            this.stageOverrides = stageOverrides;
-        }
-
-        static DispatchRuntime fromContext(ImportExecutionContext ctx, int parallelism) {
-            int configuredParallelism = Math.max(1, parallelism);
-            DispatchMode rootMode = parseEnum(DispatchMode.class, ctx.dispatchMode, DispatchMode.MIXED);
-            Map<String, DispatchPolicy> overrides = parseOverrides(
-                    ctx.stageDispatchModes,
-                    ctx.stageParallelism
-            );
-
-            return new DispatchRuntime(
-                    DispatchPolicy.of(rootMode, configuredParallelism),
-                    overrides
-            );
-        }
-
-        void executeStage(StageAE stage, DispatchPolicy parentPolicy, JCas jCas) throws AnalysisEngineProcessException {
-            try {
-                submitStage(stage, parentPolicy, jCas).join();
-            } catch (CompletionException e) {
-                Throwable cause = e.getCause();
-                if (cause instanceof AnalysisEngineProcessException) {
-                    throw (AnalysisEngineProcessException) cause;
-                }
-                throw new AnalysisEngineProcessException(cause == null ? e : cause);
-            }
-        }
-
-        CompletableFuture<Void> submitStage(StageAE stage, DispatchPolicy parentPolicy, JCas jCas) {
-            DispatchPolicy resolved = resolve(stage, parentPolicy);
-            ImportExecutionContext ctx = ImportExecutionContextHolder.get();
-
-            if (resolved.caller) {
-                return runInCaller(stage, jCas, ctx);
-            }
-            return executorFor(resolved).submit(() -> runWithContext(stage, jCas, ctx));
-        }
-
-        private DispatchPolicy resolve(StageAE stage, DispatchPolicy parentPolicy) {
-            DispatchPolicy resolved = rootPolicy
-                    .merge(parentPolicy)
-                    .merge(stage.dispatchPolicy());
-
-            DispatchPolicy override = stageOverrides.get(stage.getClass().getSimpleName());
-            if (override == null) {
-                override = stageOverrides.get(stage.getClass().getName());
-            }
-            resolved = resolved.merge(override);
-
-            int parallelism = resolved.parallelism == null ? 1 : Math.max(0, resolved.parallelism);
-            return new DispatchPolicy(resolved.mode, parallelism, resolved.caller);
-        }
-
-        private DispatchExecutor executorFor(DispatchPolicy policy) {
-            ExecutorKey key = new ExecutorKey(executorForMode(policy.mode), policy.parallelism == null ? 1 : policy.parallelism);
-            return executors.computeIfAbsent(key, DispatchRuntime::createExecutor);
-        }
-
-        private static ExecutorKind executorForMode(DispatchMode mode) {
-            if (mode == DispatchMode.IO) {
-                return ExecutorKind.VIRTUAL;
-            }
-            return ExecutorKind.PLATFORM;
-        }
-
-        private static CompletableFuture<Void> runInCaller(StageAE stage, JCas jCas, ImportExecutionContext ctx) {
-            try {
-                runWithContext(stage, jCas, ctx);
-                return CompletableFuture.completedFuture(null);
-            } catch (CompletionException e) {
-                return CompletableFuture.failedFuture(e.getCause() == null ? e : e.getCause());
-            }
-        }
-
-        private static void runWithContext(StageAE stage, JCas jCas, ImportExecutionContext ctx) {
-            ImportExecutionContext previous = ImportExecutionContextHolder.get();
-            AutoCloseable adminGuard = null;
-            try {
-                ImportExecutionContextHolder.set(ctx);
-                if (ctx != null && ctx.accessManager != null) {
-                    adminGuard = ctx.accessManager.asAdmin();
-                }
-                stage.process(jCas);
-            } catch (AnalysisEngineProcessException e) {
-                throw new CompletionException(e);
-            } catch (Exception e) {
-                throw new CompletionException(e);
-            } finally {
-                if (adminGuard != null) {
-                    try {
-                        adminGuard.close();
-                    } catch (Exception ignored) {
-                    }
-                }
-                if (previous != null) {
-                    ImportExecutionContextHolder.set(previous);
-                } else {
-                    ImportExecutionContextHolder.clear();
-                }
-            }
-        }
-
-        private static Map<String, DispatchPolicy> parseOverrides(
-                String[] stageDispatchModes,
-                String[] stageParallelism
-        ) {
-            Map<String, DispatchPolicy> overrides = new HashMap<>();
-            mergeDispatchModes(overrides, stageDispatchModes);
-            mergeParallelism(overrides, stageParallelism);
-            return overrides;
-        }
-
-        private static void mergeDispatchModes(Map<String, DispatchPolicy> overrides, String[] entries) {
-            for (StageDispatchEntry entry : parseEntries(entries)) {
-                mergeOverride(overrides, entry.stageName, DispatchPolicy.of(
-                        parseEnum(DispatchMode.class, entry.value, null),
-                        null
-                ));
-            }
-        }
-
-        private static void mergeParallelism(Map<String, DispatchPolicy> overrides, String[] entries) {
-            for (StageDispatchEntry entry : parseEntries(entries)) {
-                mergeOverride(overrides, entry.stageName, DispatchPolicy.of(
-                        null,
-                        Integer.parseInt(entry.value.trim())
-                ));
-            }
-        }
-
-        private static void mergeOverride(Map<String, DispatchPolicy> overrides, String stageName, DispatchPolicy policy) {
-            overrides.merge(stageName, policy, DispatchPolicy::merge);
-        }
-
-        private static List<StageDispatchEntry> parseEntries(String[] entries) {
-            if (entries == null || entries.length == 0) {
-                return List.of();
-            }
-            List<StageDispatchEntry> parsed = new ArrayList<>();
-            for (String entry : entries) {
-                if (entry == null || entry.isBlank()) {
-                    continue;
-                }
-                int separator = entry.indexOf('=');
-                if (separator < 0) {
-                    separator = entry.indexOf(':');
-                }
-                if (separator < 1 || separator == entry.length() - 1) {
-                    throw new IllegalArgumentException("Invalid stage dispatch override: " + entry);
-                }
-                parsed.add(new StageDispatchEntry(
-                        entry.substring(0, separator).trim(),
-                        entry.substring(separator + 1).trim()
-                ));
-            }
-            return parsed;
-        }
-
-        private static DispatchExecutor createExecutor(ExecutorKey key) {
-            if (key.kind == ExecutorKind.VIRTUAL) {
-                return new DispatchExecutor(
-                        Executors.newVirtualThreadPerTaskExecutor(),
-                        key.parallelism > 0 ? new Semaphore(key.parallelism) : null
-                );
-            }
-            return new DispatchExecutor(Executors.newFixedThreadPool(Math.max(1, key.parallelism)), null);
-        }
-
-        @Override
-        public void close() {
-            for (DispatchExecutor executor : executors.values()) {
-                executor.close();
-            }
-        }
-    }
-
-    private static final class ExecutorKey {
-        private final ExecutorKind kind;
-        private final int parallelism;
-
-        private ExecutorKey(ExecutorKind kind, int parallelism) {
-            this.kind = kind;
-            this.parallelism = parallelism;
-        }
-
-        @Override
-        public boolean equals(Object o) {
-            if (this == o) {
-                return true;
-            }
-            if (!(o instanceof ExecutorKey)) {
-                return false;
-            }
-            ExecutorKey that = (ExecutorKey) o;
-            return parallelism == that.parallelism && kind == that.kind;
-        }
-
-        @Override
-        public int hashCode() {
-            return Objects.hash(kind, parallelism);
-        }
-    }
-
-    private static final class DispatchExecutor implements AutoCloseable {
-        private final ExecutorService executor;
-        private final Semaphore permits;
-
-        private DispatchExecutor(ExecutorService executor, Semaphore permits) {
-            this.executor = executor;
-            this.permits = permits;
-        }
-
-        CompletableFuture<Void> submit(Runnable runnable) {
-            return CompletableFuture.runAsync(() -> runWithPermit(runnable), executor);
-        }
-
-        private void runWithPermit(Runnable runnable) {
-            boolean acquired = false;
-            try {
-                if (permits != null) {
-                    permits.acquire();
-                    acquired = true;
-                }
-                runnable.run();
-            } catch (InterruptedException e) {
-                Thread.currentThread().interrupt();
-                throw new CompletionException(e);
-            } finally {
-                if (acquired) {
-                    permits.release();
-                }
-            }
-        }
-
-        @Override
-        public void close() {
-            executor.shutdown();
-        }
-    }
-
-    private static final class StageDispatchEntry {
-        private final String stageName;
-        private final String value;
-
-        private StageDispatchEntry(String stageName, String value) {
-            this.stageName = stageName;
-            this.value = value;
-        }
-    }
-
-    private static <T extends Enum<T>> T parseEnum(Class<T> enumType, String value, T defaultValue) {
-        if (value == null || value.isBlank()) {
-            return defaultValue;
-        }
-        return Enum.valueOf(enumType, value.trim().toUpperCase());
-    }
-
     private static Object invokePrivate(Object target, String methodName, Class<?>[] types, Object[] args) throws Exception {
         Method m = target.getClass().getDeclaredMethod(methodName, types);
         m.setAccessible(true);
@@ -592,6 +402,7 @@ public class DUUIAEImporter extends JCasAnnotator_ImplBase {
         String corpusConfigJson;
         String[] stageDispatchModes;
         String[] stageParallelism;
+        boolean enableDomainGraphImport;
         long startedAt = System.currentTimeMillis();
         long finishedAt;
         String filePath;
@@ -601,6 +412,7 @@ public class DUUIAEImporter extends JCasAnnotator_ImplBase {
         DocumentAccessManager accessManager;
         AutoCloseable adminGuard;
         PostgresqlDataInterface_Impl db;
+        AgeGraphService ageGraphService;
         LexiconService lexiconService;
         EmbeddingService embeddingService;
         Importer importer;
@@ -612,17 +424,11 @@ public class DUUIAEImporter extends JCasAnnotator_ImplBase {
         AtomicReference<CountDownLatch> batchLatch;
         AtomicInteger docInBatch;
         Object lock;
-    }
-
-    static class ImportExecutionContextHolder {
-        private static final ThreadLocal<ImportExecutionContext> HOLDER = new ThreadLocal<>();
-        static void set(ImportExecutionContext ctx) { HOLDER.set(ctx); }
-        static ImportExecutionContext get() { return HOLDER.get(); }
-        static void clear() { HOLDER.remove(); }
+        DomainGraphBuffer domainGraphBuffer;
     }
 
     static abstract class StageAE extends JCasAnnotator_ImplBase {
-        protected ImportExecutionContext ctx() { return ImportExecutionContextHolder.get(); }
+        protected ImportExecutionContext ctx() { return currentImportContext(); }
         protected DispatchPolicy dispatchPolicy() { return DispatchPolicy.inherit(); }
     }
 
@@ -636,6 +442,7 @@ public class DUUIAEImporter extends JCasAnnotator_ImplBase {
         public void process(JCas jCas) throws AnalysisEngineProcessException {
             try {
                 ctx().db = ctx().springContext.getBean(PostgresqlDataInterface_Impl.class);
+                ctx().ageGraphService = ctx().springContext.getBean(AgeGraphService.class);
                 ctx().lexiconService = ctx().springContext.getBean(LexiconService.class);
                 ctx().embeddingService = ctx().springContext.getBean(EmbeddingService.class);
                 ctx().accessManager = ctx().springContext.getBean(DocumentAccessManager.class);
@@ -646,7 +453,7 @@ public class DUUIAEImporter extends JCasAnnotator_ImplBase {
                         () -> SystemStatus.executeExternalDatabaseScripts(commonConfig.getDatabaseScriptsLocation(), ctx().db),
                         (ex) -> logger.warn("Couldn't execute external DB scripts.", ex));
 
-                var uceImport = new UCEImport(ctx().importId, "import from DUUIAEImporter", ImportStatus.STARTING);
+                var uceImport = new org.texttechnologylab.uce.common.models.imp.UCEImport(ctx().importId, "import from DUUIAEImporter", ImportStatus.STARTING);
                 uceImport.setTotalDocuments(1);
                 ctx().db.saveOrUpdateUceImport(uceImport);
 
@@ -765,6 +572,76 @@ public class DUUIAEImporter extends JCasAnnotator_ImplBase {
                 } else {
                     ctx().workingCas = ctx().originalCas;
                 }
+            } catch (Exception e) {
+                throw new AnalysisEngineProcessException(e);
+            }
+        }
+    }
+
+    public static class DomainGraphExtractAE extends StageAE {
+        @Override
+        protected DispatchPolicy dispatchPolicy() {
+            return DispatchPolicy.cpu();
+        }
+
+        @Override
+        public void process(JCas jCas) throws AnalysisEngineProcessException {
+            try {
+                if (!ctx().enableDomainGraphImport) {
+                    return;
+                }
+
+                Map<Domain, String> uidByDomain = new IdentityHashMap<>();
+                List<DomainGraphNode> nodes = new ArrayList<>();
+                for (Domain domain : JCasUtil.select(ctx().workingCas, Domain.class)) {
+                    String id = trimToNull(domain.getId());
+                    if (id == null) {
+                        logger.warn("Skipping Domain FS without id: {}", domain.getType().getName());
+                        continue;
+                    }
+                    String uid = domainUid(ctx().corpus.getId(), id);
+                    uidByDomain.put(domain, uid);
+                    nodes.add(new DomainGraphNode(
+                            uid,
+                            domain.getType().getName(),
+                            domain.getName(),
+                            domain.getUri(),
+                            domain.getMetadata(),
+                            gson.toJson(serializeFeatures(domain))
+                    ));
+                }
+
+                List<DomainGraphEdge> edges = new ArrayList<>();
+                for (Association association : JCasUtil.select(ctx().workingCas, Association.class)) {
+                    AssociationEndpoints endpoints = resolveAssociationEndpoints(association);
+                    if (endpoints == null || endpoints.left() == null || endpoints.right() == null) {
+                        logger.warn("Skipping Association FS without resolvable endpoints: {}", association.getType().getName());
+                        continue;
+                    }
+                    String leftUid = uidByDomain.get(endpoints.left());
+                    String rightUid = uidByDomain.get(endpoints.right());
+                    if (leftUid == null || rightUid == null) {
+                        logger.warn("Skipping Association FS with endpoints missing imported Domain ids: {}", association.getType().getName());
+                        continue;
+                    }
+                    String uid = trimToNull(association.getId());
+                    if (uid == null) {
+                        uid = derivedAssociationUid(ctx().corpus.getId(), association, leftUid, rightUid, endpoints.qualifier());
+                    } else {
+                        uid = "corpus:" + ctx().corpus.getId() + ":association:" + uid;
+                    }
+                    edges.add(new DomainGraphEdge(
+                            uid,
+                            association.getType().getName(),
+                            leftUid,
+                            rightUid,
+                            association.getName(),
+                            association.getMetadata(),
+                            gson.toJson(serializeFeatures(association))
+                    ));
+                }
+
+                ctx().domainGraphBuffer = new DomainGraphBuffer(nodes, edges);
             } catch (Exception e) {
                 throw new AnalysisEngineProcessException(e);
             }
@@ -1194,6 +1071,54 @@ public class DUUIAEImporter extends JCasAnnotator_ImplBase {
         }
     }
 
+    public static class DomainGraphPersistAE extends StageAE {
+        @Override
+        protected DispatchPolicy dispatchPolicy() {
+            return DispatchPolicy.io();
+        }
+
+        @Override
+        public void process(JCas jCas) throws AnalysisEngineProcessException {
+            try {
+                if (!ctx().enableDomainGraphImport || ctx().duplicateDocument || ctx().document == null || ctx().domainGraphBuffer == null) {
+                    return;
+                }
+                if (ctx().document.getId() <= 0) {
+                    throw new IllegalStateException("Domain graph import requires a persisted document id.");
+                }
+
+                ctx().ageGraphService.ensureGraph();
+                for (DomainGraphNode node : ctx().domainGraphBuffer.nodes()) {
+                    ctx().ageGraphService.upsertDomainNode(new AgeGraphService.DomainNode(
+                            node.uid(),
+                            node.uimaType(),
+                            ctx().corpus.getId(),
+                            ctx().document.getId(),
+                            node.name(),
+                            node.uri(),
+                            node.metadata(),
+                            node.featuresJson()
+                    ));
+                }
+                for (DomainGraphEdge edge : ctx().domainGraphBuffer.edges()) {
+                    ctx().ageGraphService.upsertAssociationEdge(new AgeGraphService.AssociationEdge(
+                            edge.uid(),
+                            edge.uimaType(),
+                            ctx().corpus.getId(),
+                            ctx().document.getId(),
+                            edge.leftUid(),
+                            edge.rightUid(),
+                            edge.name(),
+                            edge.metadata(),
+                            edge.featuresJson()
+                    ));
+                }
+            } catch (Exception e) {
+                throw new AnalysisEngineProcessException(e);
+            }
+        }
+    }
+
     public static class DocumentPostProcessAE extends StageAE {
         @Override
         protected DispatchPolicy dispatchPolicy() {
@@ -1302,12 +1227,98 @@ public class DUUIAEImporter extends JCasAnnotator_ImplBase {
         }
     }
 
+    private record DomainGraphBuffer(List<DomainGraphNode> nodes, List<DomainGraphEdge> edges) {
+    }
+
+    private record DomainGraphNode(
+            String uid,
+            String uimaType,
+            String name,
+            String uri,
+            String metadata,
+            String featuresJson
+    ) {
+    }
+
+    private record DomainGraphEdge(
+            String uid,
+            String uimaType,
+            String leftUid,
+            String rightUid,
+            String name,
+            String metadata,
+            String featuresJson
+    ) {
+    }
+
+    private record AssociationEndpoints(Domain left, Domain right, String qualifier) {
+    }
+
+    private static String domainUid(long corpusId, String domainId) {
+        return "corpus:" + corpusId + ":domain:" + domainId;
+    }
+
+    private static String derivedAssociationUid(long corpusId, Association association, String leftUid, String rightUid, String qualifier) {
+        String basis = corpusId + "|" + association.getType().getName() + "|" + leftUid + "|" + rightUid + "|" + nullToEmpty(qualifier);
+        return "corpus:" + corpusId + ":association:" + UUID.nameUUIDFromBytes(basis.getBytes(StandardCharsets.UTF_8));
+    }
+
+    private static AssociationEndpoints resolveAssociationEndpoints(Association association) {
+        if (association instanceof Membership membership) {
+            return new AssociationEndpoints(membership.getWhole(), membership.getPart(), String.valueOf(membership.getOrder()));
+        }
+        if (association instanceof Sequence sequence) {
+            return new AssociationEndpoints(sequence.getPrevious(), sequence.getNext(), String.valueOf(sequence.getOrder()));
+        }
+        if (association instanceof Reference reference) {
+            return new AssociationEndpoints(reference.getContext(), reference.getReferent(), reference.getRole());
+        }
+        if (association instanceof Equivalence equivalence) {
+            return new AssociationEndpoints(equivalence.getOne(), equivalence.getOther(), equivalence.getBasis());
+        }
+        return null;
+    }
+
+    private static Map<String, Object> serializeFeatures(FeatureStructure fs) {
+        Map<String, Object> values = new HashMap<>();
+        for (Feature feature : fs.getType().getFeatures()) {
+            String name = feature.getShortName();
+            try {
+                if (feature.getRange().isPrimitive()) {
+                    values.put(name, fs.getFeatureValueAsString(feature));
+                    continue;
+                }
+                FeatureStructure value = fs.getFeatureValue(feature);
+                if (value instanceof Domain domain) {
+                    values.put(name, domain.getId());
+                } else if (value != null) {
+                    values.put(name, value.getType().getName());
+                }
+            } catch (Exception e) {
+                values.put(name, null);
+            }
+        }
+        return values;
+    }
+
+    private static String trimToNull(String value) {
+        if (value == null || value.trim().isEmpty()) {
+            return null;
+        }
+        return value.trim();
+    }
+
+    private static String nullToEmpty(String value) {
+        return value == null ? "" : value;
+    }
+
     private static void runPrivateDocumentStage(String method, Class<?>[] types, Object[] args) throws AnalysisEngineProcessException {
         try {
-            if (ImportExecutionContextHolder.get().duplicateDocument || ImportExecutionContextHolder.get().document == null) {
+            ImportExecutionContext ctx = currentImportContext();
+            if (ctx.duplicateDocument || ctx.document == null) {
                 return;
             }
-            invokePrivate(ImportExecutionContextHolder.get().importer, method, types, args);
+            invokePrivate(ctx.importer, method, types, args);
         } catch (Exception e) {
             throw new AnalysisEngineProcessException(e);
         }

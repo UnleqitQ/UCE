@@ -15,6 +15,11 @@ public class SpringConfig {
     }
 
     @Bean
+    public AgeGraphService ageGraphService() {
+        return new AgeGraphService(databaseService());
+    }
+
+    @Bean
     public LexiconService lexiconService() {
         return new LexiconService(databaseService());
     }

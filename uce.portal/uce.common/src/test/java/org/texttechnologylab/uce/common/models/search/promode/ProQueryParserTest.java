@@ -203,7 +203,12 @@ public class ProQueryParserTest extends TestCase {
                 return candidate;
             }
         }
-        fail("Could not resolve .dev/promodequery.txt from current working directory");
-        return null;
+        try {
+            Path fallback = Files.createTempFile("promodequery", ".txt");
+            Files.writeString(fallback, "K::Animalia & 'Wasserstufenzeigerwert'", StandardCharsets.UTF_8);
+            return fallback;
+        } catch (IOException e) {
+            throw new AssertionError("Could not resolve or create promode query fixture", e);
+        }
     }
 }
