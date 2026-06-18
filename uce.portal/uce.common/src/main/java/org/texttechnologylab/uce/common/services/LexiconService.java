@@ -43,7 +43,8 @@ public class LexiconService {
                     Cue.class,
                     Scope.class,
                     XScope.class,
-                    UnifiedTopic.class));
+                    UnifiedTopic.class,
+                    RecognizedTaxon.class));
 
     public LexiconService(PostgresqlDataInterface_Impl db) {
         this.db = db;
