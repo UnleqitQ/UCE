@@ -63,6 +63,8 @@ public class HibernateConf {
         metadataSources.addAnnotatedClass(GazetteerTaxon.class);
         metadataSources.addAnnotatedClass(GnFinderTaxon.class);
         metadataSources.addAnnotatedClass(BiofidTaxon.class);
+        metadataSources.addAnnotatedClass(TaxonResolution.class);
+        metadataSources.addAnnotatedClass(RecognizedTaxon.class);
         metadataSources.addAnnotatedClass(Time.class);
         metadataSources.addAnnotatedClass(WikiDataHyponym.class);
         metadataSources.addAnnotatedClass(WikipediaLink.class);

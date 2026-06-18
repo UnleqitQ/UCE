@@ -2,17 +2,10 @@ package org.texttechnologylab.uce.common.models.corpus;
 
 import lombok.Getter;
 import lombok.Setter;
-import org.hibernate.annotations.Fetch;
-import org.texttechnologylab.uce.common.annotations.Taxonsystem;
 import org.texttechnologylab.uce.common.annotations.Typesystem;
 import org.texttechnologylab.uce.common.models.ModelBase;
-import org.texttechnologylab.uce.common.models.UIMAAnnotation;
-import org.texttechnologylab.uce.common.models.WikiModel;
 
 import javax.persistence.*;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.List;
 
 @Getter
 @Setter
@@ -22,7 +15,7 @@ public class TaxonResolution extends ModelBase {
 
 	@ManyToOne(fetch = FetchType.LAZY)
 	@JoinColumn(name = "recognized_taxon_id", nullable = false)
-	private RecognizedTaxon recognizedTaxonId;
+	private RecognizedTaxon recognizedTaxon;
 
 	@Column(columnDefinition = "TEXT", nullable = false)
 	private String provider;
@@ -121,7 +114,7 @@ public class TaxonResolution extends ModelBase {
 
 	@Column(columnDefinition = "TEXT")
 	private String remarks;
-	@Column(columnDefinition = "TEXT")
+	@Column(columnDefinition = "TEXT", name = "references_")
 	private String references;
 	@Column(columnDefinition = "TEXT")
 	private String publishedIn;
@@ -149,8 +142,10 @@ public class TaxonResolution extends ModelBase {
 	@Column(columnDefinition = "TEXT")
 	private String wikidataUrl;
 
+	public TaxonResolution() {
+	}
 
-	private void loadFromAnnotation(org.texttechnologylab.annotation.type.TaxonResolution annotation) {
+	public void loadFromAnnotation(org.texttechnologylab.annotation.type.TaxonResolution annotation) {
 		this.provider = annotation.getProvider();
 		this.taxonId = annotation.getTaxonId();
 		this.kingdomName = annotation.getKingdomName();

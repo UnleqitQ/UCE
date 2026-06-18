@@ -30,7 +30,7 @@ public class RecognizedTaxon extends UIMAAnnotation implements WikiModel {
 
 	@Setter
 	@Getter
-	@OneToMany(mappedBy = "recognizedTaxonId", cascade = CascadeType.ALL, fetch = FetchType.EAGER, orphanRemoval = true)
+	@OneToMany(mappedBy = "recognizedTaxon", cascade = CascadeType.ALL, fetch = FetchType.EAGER, orphanRemoval = true)
 	@Fetch(value = FetchMode.SUBSELECT)
 	private List<TaxonResolution> resolutions;
 
