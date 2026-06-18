@@ -229,6 +229,12 @@ public class Document extends ModelBase implements WikiModel, Linkable {
     @Fetch(value = FetchMode.SUBSELECT)
     private List<UnifiedTopic> unifiedTopics;
 
+    @Setter
+    @Getter
+    @OneToMany(mappedBy = "document", cascade = CascadeType.ALL, fetch = FetchType.EAGER)
+    @Fetch(value = FetchMode.SUBSELECT)
+    private List<RecognizedTaxon> recognizedTaxa;
+
     @Getter
     @Setter
     @OneToMany(cascade = CascadeType.ALL)
