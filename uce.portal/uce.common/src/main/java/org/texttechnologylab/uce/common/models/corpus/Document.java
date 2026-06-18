@@ -440,6 +440,7 @@ public class Document extends ModelBase implements WikiModel, Linkable {
         // unifiedTopics
         annotations.addAll(unifiedTopics.stream().filter(a -> a.getBegin() >= pagesBegin && a.getEnd() <= pagesEnd).toList());
         annotations.addAll(images.stream().filter(a -> a.getBegin() >= pagesBegin && a.getEnd() <= pagesEnd).toList());
+        annotations.addAll(recognizedTaxa.stream().filter(a -> a.getBegin() >= pagesBegin && a.getEnd() <= pagesEnd).toList());
 
         annotations.sort(Comparator.comparingInt(UIMAAnnotation::getBegin));
         return annotations;

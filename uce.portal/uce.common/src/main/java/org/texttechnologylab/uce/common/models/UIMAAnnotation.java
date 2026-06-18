@@ -1,41 +1,18 @@
 package org.texttechnologylab.uce.common.models;
 
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Locale;
-import java.util.Map;
-import java.util.TreeMap;
-import java.util.UUID;
-
-import javax.persistence.Column;
-import javax.persistence.FetchType;
-import javax.persistence.JoinColumn;
-import javax.persistence.ManyToOne;
-import javax.persistence.MappedSuperclass;
-
-import org.texttechnologylab.uce.common.models.corpus.GeoName;
-import org.texttechnologylab.uce.common.models.corpus.Image;
-import org.texttechnologylab.uce.common.models.corpus.Lemma;
-import org.texttechnologylab.uce.common.models.corpus.NamedEntity;
-import org.texttechnologylab.uce.common.models.corpus.Page;
-import org.texttechnologylab.uce.common.models.corpus.Sentiment;
-import org.texttechnologylab.uce.common.models.corpus.Taxon;
-import org.texttechnologylab.uce.common.models.corpus.Time;
-import org.texttechnologylab.uce.common.models.corpus.WikipediaLink;
+import lombok.Getter;
+import lombok.Setter;
+import org.texttechnologylab.uce.common.models.corpus.*;
 import org.texttechnologylab.uce.common.models.corpus.emotion.Emotion;
 import org.texttechnologylab.uce.common.models.corpus.links.AnnotationLink;
 import org.texttechnologylab.uce.common.models.corpus.links.AnnotationToDocumentLink;
 import org.texttechnologylab.uce.common.models.corpus.links.DocumentToAnnotationLink;
-import org.texttechnologylab.uce.common.models.negation.Cue;
-import org.texttechnologylab.uce.common.models.negation.Event;
-import org.texttechnologylab.uce.common.models.negation.Focus;
-import org.texttechnologylab.uce.common.models.negation.Scope;
-import org.texttechnologylab.uce.common.models.negation.XScope;
+import org.texttechnologylab.uce.common.models.negation.*;
 import org.texttechnologylab.uce.common.models.topic.UnifiedTopic;
 import org.texttechnologylab.uce.common.utils.StringUtils;
 
-import lombok.Getter;
-import lombok.Setter;
+import javax.persistence.*;
+import java.util.*;
 
 @MappedSuperclass
 public class UIMAAnnotation extends ModelBase implements Linkable {
@@ -449,6 +426,20 @@ public class UIMAAnnotation extends ModelBase implements Linkable {
                 return String.format(
                         "<span class='open-wiki-page annotation custom-context-menu topic colorable-topic' title='%1$s' data-wid='%2$s' data-wcovered='%3$s' data-topic-value='%4$s'>",
                         includeTitle ? repTopicValue : "", topic.getWikiId(), topic.getCoveredText(), repTopicValue);
+            }
+            case RecognizedTaxon recognizedTaxon -> {
+                String scientificName = recognizedTaxon.findBestScientificName();
+                StringBuilder tagBuilder = new StringBuilder();
+								tagBuilder.append("<span class='open-wiki-page annotation custom-context-menu recognized-taxon' title='");
+								if (includeTitle) {
+										tagBuilder.append(recognizedTaxon.getCoveredText());
+								}
+								tagBuilder.append("' data-wid='").append(recognizedTaxon.getWikiId()).append("' data-wcovered='").append(recognizedTaxon.getCoveredText()).append("'");
+								if (scientificName != null) {
+										tagBuilder.append(" data-scientific-name='").append(scientificName).append("'");
+								}
+								tagBuilder.append(">");
+								return tagBuilder.toString();
             }
             default -> {
             }

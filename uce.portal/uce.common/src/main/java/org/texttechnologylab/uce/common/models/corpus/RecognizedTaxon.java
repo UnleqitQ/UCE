@@ -2,17 +2,15 @@ package org.texttechnologylab.uce.common.models.corpus;
 
 import lombok.Getter;
 import lombok.Setter;
+import org.apache.commons.text.similarity.LevenshteinDistance;
 import org.hibernate.annotations.Fetch;
 import org.hibernate.annotations.FetchMode;
-import org.texttechnologylab.uce.common.annotations.Taxonsystem;
 import org.texttechnologylab.uce.common.annotations.Typesystem;
 import org.texttechnologylab.uce.common.models.UIMAAnnotation;
 import org.texttechnologylab.uce.common.models.WikiModel;
 
 import javax.persistence.*;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.List;
+import java.util.*;
 
 @Entity
 @Typesystem(types = {org.texttechnologylab.annotation.type.RecognizedTaxon.class})
@@ -45,5 +43,25 @@ public class RecognizedTaxon extends UIMAAnnotation implements WikiModel {
 	@Override
 	public String getWikiId() {
 		return "RTx-%d".formatted(this.getId());
+	}
+
+	public String findBestScientificName() {
+		List<String> scientificNames = getResolutions().stream()
+			.map(TaxonResolution::getScientificName)
+			.filter(Objects::nonNull)
+			.toList();
+		if (scientificNames.isEmpty()) {
+			return null;
+		}
+		if (scientificNames.size() <= 2) {
+			return scientificNames.getFirst();
+		}
+		return scientificNames.stream()
+			.map(name -> Map.entry(name, scientificNames.stream()
+				.mapToInt(ref -> LevenshteinDistance.getDefaultInstance().apply(name, ref))
+				.sum()))
+			.min(Comparator.comparingInt(Map.Entry::getValue))
+			.map(Map.Entry::getKey)
+			.orElse(null);
 	}
 }
