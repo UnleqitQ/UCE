@@ -440,6 +440,22 @@ body.feedback-layout.sidebar-drawer-mode .reader-main.reader-feedback-centered {
     color: white
 }
 
+.document-content .annotation.recognized-taxon {
+    --default-taxon-color: gray;
+    --internal-taxon-color: var(--taxon-color, var(--default-taxon-color));
+
+    background-color: unset;
+    color: unset;
+    border: var(--internal-taxon-color) 1px solid;
+    border-radius: 3px;
+
+    transition: border-width 0.2s ease;
+
+    &:hover {
+        border-width: 3px;
+    }
+}
+
 .document-content .highlighted {
     font-weight: bold;
     padding-left: 3px;

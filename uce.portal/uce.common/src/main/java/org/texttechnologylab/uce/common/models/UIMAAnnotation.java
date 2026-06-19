@@ -133,6 +133,8 @@ public class UIMAAnnotation extends ModelBase implements Linkable {
         Map<Integer, String> emotionCoverWrappersStart = new TreeMap<>();
         Map<Integer, String> emotionCoverWrappersEnd = new TreeMap<>();
         Map<Integer, String> emotionMarkers = new TreeMap<>();
+        Map<Integer, String> recognizedTaxonCoverWrappersStart = new TreeMap<>();
+        Map<Integer, String> recognizedTaxonCoverWrappersEnd = new TreeMap<>();
 
         for (var annotation : annotations) {
             if (annotation.getCoveredText() == null) {
@@ -218,6 +220,15 @@ public class UIMAAnnotation extends ModelBase implements Linkable {
                 continue;
             }
 
+            if (annotation instanceof RecognizedTaxon recognizedTaxon) {
+                var start = recognizedTaxon.getBegin() - offset - errorOffset;
+                var end = recognizedTaxon.getEnd() - offset - errorOffset;
+
+                recognizedTaxonCoverWrappersStart.put(start, recognizedTaxon.generateCoverStartTag(true));
+                recognizedTaxonCoverWrappersEnd.put(end, "</span>");
+                continue;
+            }
+
             var start = annotation.getBegin() - offset - errorOffset;
             var end = annotation.getEnd() - offset - errorOffset;
 
@@ -265,6 +276,9 @@ public class UIMAAnnotation extends ModelBase implements Linkable {
             }
 
             // Insert the end spans
+            if (recognizedTaxonCoverWrappersEnd.containsKey(i)) {
+                finalText.append(recognizedTaxonCoverWrappersEnd.get(i));
+            }
             if (topicCoverWrappersEnd.containsKey(i)) {
                 finalText.append(topicCoverWrappersEnd.get(i));
             }
@@ -294,6 +308,9 @@ public class UIMAAnnotation extends ModelBase implements Linkable {
             if (sentimentCoverWrappersStart.containsKey(i)) {
                 finalText.append(sentimentCoverWrappersStart.get(i));
                 sentimentCoverWrappersStart.remove(i);
+            }
+            if (recognizedTaxonCoverWrappersStart.containsKey(i)) {
+                finalText.append(recognizedTaxonCoverWrappersStart.get(i));
             }
 
             // Insert marker after character
@@ -426,20 +443,6 @@ public class UIMAAnnotation extends ModelBase implements Linkable {
                 return String.format(
                         "<span class='open-wiki-page annotation custom-context-menu topic colorable-topic' title='%1$s' data-wid='%2$s' data-wcovered='%3$s' data-topic-value='%4$s'>",
                         includeTitle ? repTopicValue : "", topic.getWikiId(), topic.getCoveredText(), repTopicValue);
-            }
-            case RecognizedTaxon recognizedTaxon -> {
-                String scientificName = recognizedTaxon.findBestScientificName();
-                StringBuilder tagBuilder = new StringBuilder();
-								tagBuilder.append("<span class='open-wiki-page annotation custom-context-menu recognized-taxon' title='");
-								if (includeTitle) {
-										tagBuilder.append(recognizedTaxon.getCoveredText());
-								}
-								tagBuilder.append("' data-wid='").append(recognizedTaxon.getWikiId()).append("' data-wcovered='").append(recognizedTaxon.getCoveredText()).append("'");
-								if (scientificName != null) {
-										tagBuilder.append(" data-scientific-name='").append(scientificName).append("'");
-								}
-								tagBuilder.append(">");
-								return tagBuilder.toString();
             }
             default -> {
             }
